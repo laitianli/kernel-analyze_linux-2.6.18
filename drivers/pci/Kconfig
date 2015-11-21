@@ -27,3 +27,12 @@ config PCI_DEBUG
 
 	  When in doubt, say N.
 
+config PCI_IOV
+	bool "PCI IOV support"
+	depends on PCI
+	help
+	  I/O Virtualization is a PCI feature supported by some devices
+	  which allows them to create virtual devices which share their
+	  physical resources.
+
+	  If unsure, say N.

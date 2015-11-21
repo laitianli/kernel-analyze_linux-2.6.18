@@ -94,9 +94,23 @@ enum pci_channel_state {
 	pci_channel_io_perm_failure = (__force pci_channel_state_t) 3,
 };
 
+typedef unsigned int __bitwise pcie_reset_state_t;
+
+enum pcie_reset_state {
+	/* Reset is NOT asserted (Use to deassert reset) */
+	pci_reset_normal = (__force pcie_reset_state_t) 1,
+
+	/* Use #PERST to reset device */
+	pci_reset_pcie_warm_reset = (__force pcie_reset_state_t) 2,
+
+	/* Use PCI-E Hot Reset to reset device */
+	pci_reset_pcie_hot_reset = (__force pcie_reset_state_t) 3
+};
+
 typedef unsigned short __bitwise pci_bus_flags_t;
 enum pci_bus_flags {
-	PCI_BUS_FLAGS_NO_MSI = (__force pci_bus_flags_t) 1,
+	PCI_BUS_FLAGS_NO_MSI   = (__force pci_bus_flags_t) 1,
+	PCI_BUS_FLAGS_NO_MMRBC = (__force pci_bus_flags_t) 2,
 };
 
 struct pci_cap_saved_state {
@@ -104,6 +118,9 @@ struct pci_cap_saved_state {
 	char cap_nr;
 	u32 data[0];
 };
+
+struct pci_sriov;
+struct pci_ats;
 
 /*
  * The pci_dev structure is used to describe PCI devices.
@@ -127,6 +144,9 @@ struct pci_dev {
 	u8		hdr_type;	/* PCI header type (`multi' flag masked out) */
 	u8		rom_base_reg;	/* which config register controls the ROM */
 	u8		pin;  		/* which interrupt pin this device uses */
+#ifndef __GENKSYMS__
+	u8		pcie_type;	/* PCI-E device/port type */
+#endif
 
 	struct pci_driver *driver;	/* which driver has allocated this device */
 	u64		dma_mask;	/* Mask of the bits of bus address this
@@ -170,18 +190,47 @@ struct pci_dev {
 	unsigned int	broken_parity_status:1;	/* Device generates false positive parity */
 	unsigned int 	msi_enabled:1;
 	unsigned int	msix_enabled:1;
+#ifndef __GENKSYMS__
+	unsigned int	ari_enabled:1;	/* ARI forwarding */
+	unsigned int	is_managed:1;
+	unsigned int	is_physfn:1;
+	unsigned int	is_virtfn:1;
+	unsigned int	is_pcie:1;
+	unsigned int	fndmntl_rst_rqd:1; /* Dev requires fundamental reset */
+#endif
 
 	u32		saved_config_space[16]; /* config space saved at suspend time */
 	struct hlist_head saved_cap_space;
 	struct bin_attribute *rom_attr; /* attribute descriptor for sysfs ROM entry */
 	int rom_attr_enabled;		/* has display of the rom attribute been enabled? */
 	struct bin_attribute *res_attr[DEVICE_COUNT_RESOURCE]; /* sysfs file for resources */
+#ifndef __GENKSYMS__
+	u8              revision;       /* PCI revision, low byte of class word */
+#ifdef CONFIG_PCI_IOV
+	union {
+		struct pci_sriov *sriov;	/* SR-IOV capability related */
+		struct pci_dev *physfn;	/* the PF this VF is associated with */
+	};
+#endif
+#ifdef CONFIG_DMAR
+	void *iommu; /* hook for IOMMU specific extension */
+#endif
+#ifdef CONFIG_PCI_IOV
+	struct pci_ats *ats; /* Address Translation Service */
+#endif
+	unsigned int aer_firmware_first:1;
+#endif /* !__GENKSYMS__ */
 };
 
 #define pci_dev_g(n) list_entry(n, struct pci_dev, global_list)
 #define pci_dev_b(n) list_entry(n, struct pci_dev, bus_list)
 #define	to_pci_dev(n) container_of(n, struct pci_dev, dev)
 #define for_each_pci_dev(d) while ((d = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, d)) != NULL)
+
+static inline int pci_channel_offline(struct pci_dev *pdev)
+{
+	return (pdev->error_state != pci_channel_io_normal);
+}
 
 static inline struct pci_cap_saved_state *pci_find_saved_cap(
 	struct pci_dev *pci_dev,char cap)
@@ -218,6 +267,8 @@ static inline void pci_remove_saved_cap(struct pci_cap_saved_state *cap)
 #define PCI_ROM_RESOURCE	6
 #define PCI_BRIDGE_RESOURCES	7
 #define PCI_NUM_RESOURCES	11
+#define PCI_IOV_RESOURCES	12
+#define PCI_IOV_RESOURCE_END	(PCI_IOV_RESOURCES + PCI_SRIOV_NUM_BARS - 1)
 
 #ifndef PCI_BUS_NUM_RESOURCES
 #define PCI_BUS_NUM_RESOURCES	8
@@ -802,6 +853,25 @@ extern int pci_pci_problems;
 #define PCIPCI_VIAETBF		8
 #define PCIPCI_VSFX		16
 #define PCIPCI_ALIMAGIK		32
+
+int pci_ext_cfg_avail(struct pci_dev *dev);
+
+void __iomem *pci_ioremap_bar(struct pci_dev *pdev, int bar);
+
+#ifdef CONFIG_PCI_IOV
+extern int pci_enable_sriov(struct pci_dev *dev, int nr_virtfn);
+extern void pci_disable_sriov(struct pci_dev *dev);
+#else
+static inline int pci_enable_sriov(struct pci_dev *dev, int nr_virtfn)
+{
+	return -ENODEV;
+}
+static inline void pci_disable_sriov(struct pci_dev *dev)
+{
+}
+#endif
+
+void pci_request_acs(void);
 
 #endif /* __KERNEL__ */
 #endif /* LINUX_PCI_H */

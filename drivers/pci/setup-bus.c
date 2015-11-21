@@ -59,10 +59,19 @@ pbus_assign_resources_sorted(struct pci_bus *bus)
 		//排除pci桥、主桥、PIC
 		/* Don't touch classless devices or host bridges or ioapics.  */
 		if (class == PCI_CLASS_NOT_DEFINED ||
-		    class == PCI_CLASS_BRIDGE_HOST ||
-		    class == PCI_CLASS_SYSTEM_PIC)
-			continue;
-	
+		    class == PCI_CLASS_BRIDGE_HOST)
+		    continue;
+		
+		if (class == PCI_CLASS_SYSTEM_PIC)
+		{
+			u16 cmd;
+			pci_read_config_word(dev,PCI_COMMAND, &cmd);
+			if(cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY))
+			{
+				continue;
+			}
+		}
+
 		pdev_sort_resources(dev, &head);
 	}
 	//为还没有分配资源的设备分配资源。

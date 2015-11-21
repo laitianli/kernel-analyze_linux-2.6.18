@@ -47,3 +47,4 @@ endif
 ifeq ($(CONFIG_PCI_DEBUG),y)
 EXTRA_CFLAGS += -DDEBUG
 endif
+obj-$(CONFIG_PCI_IOV) += iov.o

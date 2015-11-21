@@ -504,6 +504,7 @@ pci_restore_state(struct pci_dev *dev)
 	}
 	pci_restore_msi_state(dev);
 	pci_restore_msix_state(dev);
+	pci_restore_iov_state(dev);
 	return 0;
 }
 
@@ -655,6 +656,91 @@ int pci_enable_wake(struct pci_dev *dev, pci_power_t state, int enable)
 	pci_write_config_word(dev, pm + PCI_PM_CTRL, value);
 	
 	return 0;
+}
+
+/**
+ * pci_enable_ari - enable ARI forwarding if hardware support it
+ * @dev: the PCI device
+ */
+void pci_enable_ari(struct pci_dev *dev)
+{
+	int pos;
+	u32 cap;
+	u16 ctrl;
+	struct pci_dev *bridge;
+
+	if (dev->devfn)
+		return;
+
+	pos = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_ARI);
+	if (!pos)
+		return;
+
+	bridge = dev->bus->self;
+	if (!bridge)
+		return;
+
+	pos = pci_find_capability(bridge, PCI_CAP_ID_EXP);
+	if (!pos)
+		return;
+
+	pci_read_config_dword(bridge, pos + PCI_EXP_DEVCAP2, &cap);
+	if (!(cap & PCI_EXP_DEVCAP2_ARI))
+		return;
+
+	pci_read_config_word(bridge, pos + PCI_EXP_DEVCTL2, &ctrl);
+	ctrl |= PCI_EXP_DEVCTL2_ARI;
+	pci_write_config_word(bridge, pos + PCI_EXP_DEVCTL2, ctrl);
+
+	bridge->ari_enabled = 1;
+}
+
+static int pci_acs_enable;
+
+/**
+ * pci_request_acs - ask for ACS to be enabled if supported
+ */
+void pci_request_acs(void)
+{
+	pci_acs_enable = 1;
+}
+
+/**
+ * pci_enable_acs - enable ACS if hardware support it
+ * @dev: the PCI device
+ */
+void pci_enable_acs(struct pci_dev *dev)
+{
+	int pos;
+	u16 cap;
+	u16 ctrl;
+
+	if (!pci_acs_enable)
+		return;
+
+	if (!dev->is_pcie)
+		return;
+
+	pos = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_ACS);
+	if (!pos)
+		return;
+
+	pci_read_config_word(dev, pos + PCI_ACS_CAP, &cap);
+	pci_read_config_word(dev, pos + PCI_ACS_CTRL, &ctrl);
+
+	/* Source Validation */
+	ctrl |= (cap & PCI_ACS_SV);
+
+	/* P2P Request Redirect */
+	ctrl |= (cap & PCI_ACS_RR);
+
+	/* P2P Completion Redirect */
+	ctrl |= (cap & PCI_ACS_CR);
+
+	/* Upstream Forwarding */
+	ctrl |= (cap & PCI_ACS_UF);
+
+	pci_write_config_word(dev, pos + PCI_ACS_CTRL, ctrl);
 }
 
 int

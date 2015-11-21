@@ -143,12 +143,125 @@ static u32 pci_size(u32 base, u32 maxbase, u32 mask)
 
 	return size;
 }
-/**ltl
-功能:读取配置空间:bar and rom
-参数:dev		->设备对象
-	howmany	->bar空间个数:6/2
-	rom		->base rom的起始地址
-*/
+
+static inline enum pci_bar_type decode_bar(struct resource *res, u32 bar)
+{
+	if ((bar & PCI_BASE_ADDRESS_SPACE) == PCI_BASE_ADDRESS_SPACE_IO) {
+		res->flags = bar & ~PCI_BASE_ADDRESS_IO_MASK;
+		return pci_bar_io;
+	}
+
+	res->flags = bar & ~PCI_BASE_ADDRESS_MEM_MASK;
+
+	if (res->flags & PCI_BASE_ADDRESS_MEM_TYPE_64)
+		return pci_bar_mem64;
+	return pci_bar_mem32;
+}
+
+/** add by ltl
+ * pci_read_base - read a PCI BAR
+ * @dev: the PCI device
+ * @type: type of the BAR
+ * @res: resource buffer to be filled in
+ * @pos: BAR position in the config space
+ *
+ * Returns 1 if the BAR is 64-bit, or 0 if 32-bit.
+ */
+int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
+			struct resource *res, unsigned int pos)
+{
+	u32 l, sz, mask;
+
+	mask = type ? ~PCI_ROM_ADDRESS_ENABLE : ~0;
+
+	res->name = pci_name(dev);
+
+	pci_read_config_dword(dev, pos, &l);
+	pci_write_config_dword(dev, pos, mask);
+	pci_read_config_dword(dev, pos, &sz);
+	pci_write_config_dword(dev, pos, l);
+
+	/*
+	 * All bits set in sz means the device isn't working properly.
+	 * If the BAR isn't implemented, all bits must be 0.  If it's a
+	 * memory BAR or a ROM, bit 0 must be clear; if it's an io BAR, bit
+	 * 1 must be clear.
+	 */
+	if (!sz || sz == 0xffffffff)
+		goto fail;
+
+	/*
+	 * I don't know how l can have all bits set.  Copied from old code.
+	 * Maybe it fixes a bug on some ancient platform.
+	 */
+	if (l == 0xffffffff)
+		l = 0;
+
+	if (type == pci_bar_unknown) {
+		type = decode_bar(res, l);
+		res->flags |= pci_calc_resource_flags(l);
+		if (type == pci_bar_io) {
+			l &= PCI_BASE_ADDRESS_IO_MASK;
+			mask = PCI_BASE_ADDRESS_IO_MASK & 0xffff;
+		} else {
+			l &= PCI_BASE_ADDRESS_MEM_MASK;
+			mask = (u32)PCI_BASE_ADDRESS_MEM_MASK;
+		}
+	} else {
+		res->flags |= (l & IORESOURCE_ROM_ENABLE);
+		l &= PCI_ROM_ADDRESS_MASK;
+		mask = (u32)PCI_ROM_ADDRESS_MASK;
+	}
+
+	if (type == pci_bar_mem64) {
+		u64 l64 = l;
+		u64 sz64 = sz;
+		u64 mask64 = mask | (u64)~0 << 32;
+
+		pci_read_config_dword(dev, pos + 4, &l);
+		pci_write_config_dword(dev, pos + 4, ~0);
+		pci_read_config_dword(dev, pos + 4, &sz);
+		pci_write_config_dword(dev, pos + 4, l);
+
+		l64 |= ((u64)l << 32);
+		sz64 |= ((u64)sz << 32);
+
+		sz64 = pci_size(l64, sz64, mask64);
+
+		if (!sz64)
+			goto fail;
+
+		if ((sizeof(resource_size_t) < 8) && (sz64 > 0x100000000ULL)) {
+			dev_err(&dev->dev, "can't handle 64-bit BAR\n");
+			goto fail;
+		} else if ((sizeof(resource_size_t) < 8) && l) {
+			/* Address above 32-bit boundary; disable the BAR */
+			pci_write_config_dword(dev, pos, 0);
+			pci_write_config_dword(dev, pos + 4, 0);
+			res->start = 0;
+			res->end = sz64;
+		} else {
+			res->start = l64;
+			res->end = l64 + sz64;
+		}
+	} else {
+		sz = pci_size(l, sz, mask);
+
+		if (!sz)
+			goto fail;
+
+		res->start = l;
+		res->end = l + sz;
+	}
+
+ out:
+	return (type == pci_bar_mem64) ? 1 : 0;
+ fail:
+	res->flags = 0;
+	goto out;
+}
+
+
 static void pci_read_bases(struct pci_dev *dev, unsigned int howmany, int rom)
 {
 	unsigned int pos, reg, next;
@@ -369,13 +482,10 @@ pci_alloc_child_bus(struct pci_bus *parent, struct pci_dev *bridge, int busnr)
 	child = pci_alloc_bus();
 	if (!child)
 		return NULL;
-
-	child->self = bridge;//总线所属的桥设备对象
 	child->parent = parent;//总线的父总线对象
 	child->ops = parent->ops;//总线的操作对象
 	child->sysdata = parent->sysdata;//私有数据
 	child->bus_flags = parent->bus_flags;//总线的属性标志
-	child->bridge = get_device(&bridge->dev);//设备对象
 
 	child->class_dev.class = &pcibus_class;//总线类
 	sprintf(child->class_dev.class_id, "%04x:%02x", pci_domain_nr(child), busnr);//总线类名
@@ -389,6 +499,12 @@ pci_alloc_child_bus(struct pci_bus *parent, struct pci_dev *bridge, int busnr)
 	child->number = child->secondary = busnr;//设置总线的编号，次总线编号
 	child->primary = parent->secondary;//设置总线的主总线编号。
 	child->subordinate = 0xff;//设置此棵总线树的中最大总线编号。
+
+	if (!bridge)
+		return child;
+
+	child->self = bridge; /* 总线所属的桥设备对象 */
+	child->bridge = get_device(&bridge->dev); /* 设备对象 */
 
 	/* Set up default resource pointers and names.. */
 	for (i = 0; i < 4; i++) {//设置总线的资源，与所属桥设备中的resource[7,8,9,10]一样
@@ -690,6 +806,20 @@ static void pci_read_irq(struct pci_dev *dev)
 	dev->irq = irq;
 }
 
+
+static void set_pcie_port_type(struct pci_dev *pdev)
+{
+	int pos;
+	u16 reg16;
+
+	pos = pci_find_capability(pdev, PCI_CAP_ID_EXP);
+	if (!pos)
+		return;
+	pdev->is_pcie = 1;
+	pci_read_config_word(pdev, pos + PCI_EXP_FLAGS, &reg16);
+	pdev->pcie_type = (reg16 & PCI_EXP_FLAGS_TYPE) >> 4;
+}
+
 /**
  * pci_setup_device - fill in class and map information of a device
  * @dev: the device structure to fill
@@ -705,10 +835,15 @@ static void pci_read_irq(struct pci_dev *dev)
 参数:dev->pci设备对象
 返回值:
 */
-static int pci_setup_device(struct pci_dev * dev)
+int pci_setup_device(struct pci_dev * dev)
 {
 	u32 class;
-
+	u8 hdr_type = 0;
+	if (pci_read_config_byte(dev, PCI_HEADER_TYPE, &hdr_type))
+	{
+		return -EIO;
+	}
+	
 	sprintf(pci_name(dev), "%04x:%02x:%02x.%d", pci_domain_nr(dev->bus),
 		dev->bus->number, PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
 	//读取revision
@@ -717,12 +852,21 @@ static int pci_setup_device(struct pci_dev * dev)
 	dev->class = class;//classcode->baseclass:subclass:interface
 	class >>= 8;
 
+	dev->sysdata = dev->bus->sysdata;
+	dev->dev.parent = dev->bus->bridge;
+	dev->dev.bus = &pci_bus_type;
+	dev->cfg_size = pci_cfg_space_size(dev);
+	dev->hdr_type = hdr_type & 0x7f;
+	dev->multifunction = !!(hdr_type & 0x80);
+	dev->error_state = pci_channel_io_normal;
+	
 	pr_debug("PCI: Found %s [%04x/%04x] %06x %02x\n", pci_name(dev),
 		 dev->vendor, dev->device, class, dev->hdr_type);
 
 	/* "Unknown power state" */
 	dev->current_state = PCI_UNKNOWN;
-
+	
+	set_pcie_port_type(dev);
 	/* Early fixups, before probing the BARs */
 	pci_fixup_device(pci_fixup_early, dev);//这里主要禁用中断(MSI/MSIX,PIN)
 	class = dev->class >> 8;
@@ -784,6 +928,7 @@ static void pci_release_dev(struct device *dev)
 	struct pci_dev *pci_dev;
 
 	pci_dev = to_pci_dev(dev);
+	pci_iov_release(pci_dev);
 	kfree(pci_dev);
 }
 
@@ -916,6 +1061,15 @@ void __devinit pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	//对一此特殊的设备，还要读取PCI配置的其它信息，并做处理。比如:多余的bar
 	/* Fix up broken headers */
 	pci_fixup_device(pci_fixup_header, dev);
+
+	/* Alternative Routing-ID Forwarding */
+	pci_enable_ari(dev);
+
+	/* Single Root I/O Virtualization */
+	pci_iov_init(dev);
+
+	/* Enable ACS P2P upstream forwarding */
+	pci_enable_acs(dev);
 
 	/*
 	 * Add the device to our list of discovered devices

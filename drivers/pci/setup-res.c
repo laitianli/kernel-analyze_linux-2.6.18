@@ -58,10 +58,14 @@ pci_update_resource(struct pci_dev *dev, struct resource *res, int resno)
 			return;
 		new |= PCI_ROM_ADDRESS_ENABLE;
 		reg = dev->rom_base_reg;
-	} else {
+	} else if(resno > PCI_NUM_RESOURCES){
 		/* Hmm, non-standard resource. */
-	
-		return;		/* kill uninitialised var warning */
+		//return;		/* kill uninitialised var warning */
+		
+		enum pci_bar_type type = pci_bar_unknown;
+		reg = pci_iov_resource_bar(dev, resno, &type);
+		if(!reg)
+			return;
 	}
 
 	pci_write_config_dword(dev, reg, new);
@@ -126,18 +130,35 @@ EXPORT_SYMBOL_GPL(pci_claim_resource);
 int pci_assign_resource(struct pci_dev *dev, int resno)
 {
 	struct pci_bus *bus = dev->bus;
-	struct resource *res = dev->resource + resno;
+	struct resource *res;
 	resource_size_t size, min, align;
 	int ret;
+	
+	
+	if (resno <= PCI_NUM_RESOURCES) {
+		res = dev->resource + resno;
+#ifdef CONFIG_PCI_IOV
+	} else if (resno >= PCI_IOV_RESOURCES &&
+		   resno <= PCI_IOV_RESOURCE_END) {
 
-	size = res->end - res->start + 1;//资源大小(从bios中读取)
-	//新分配资源的最小值(io:4K,mem: )
+		BUG_ON(!dev->is_physfn);
+
+		res = dev->sriov->res + (resno - PCI_IOV_RESOURCES);
+#endif
+	} else {
+		dev_err(&dev->dev, "invalid resource #%d\n", resno);
+
+		return -EINVAL;
+	}
+
+	size = res->end - res->start + 1;
 	min = (res->flags & IORESOURCE_IO) ? PCIBIOS_MIN_IO : PCIBIOS_MIN_MEM;
 	/* The bridge resources are special, as their
 	   size != alignment. Sizing routines return
 	   required alignment in the "start" field. */
-	align = (resno < PCI_BRIDGE_RESOURCES) ? size : res->start;
-	
+	align = (resno < PCI_BRIDGE_RESOURCES ||
+		 resno > PCI_NUM_RESOURCES) ? size : res->start;
+
 	/* First, try exact prefetching match.. */
 	ret = pci_bus_alloc_resource(bus, res, size, align, min,
 				     IORESOURCE_PREFETCH,
@@ -158,12 +179,19 @@ int pci_assign_resource(struct pci_dev *dev, int resno)
 	PCI: Failed to allocate mem resource #15:20000@abaf0000 for 0000:05:00.1
 	*/
 	if (ret) {
-		printk(KERN_ERR "PCI: Failed to allocate %s resource "
-			"#%d:%llx@%llx for %s\n",
-			res->flags & IORESOURCE_IO ? "I/O" : "mem",
-			resno, (unsigned long long)size,
-			(unsigned long long)res->start, pci_name(dev));
-	} else if (resno < PCI_BRIDGE_RESOURCES) {
+		if (resno < PCI_ROM_RESOURCE || resno > PCI_NUM_RESOURCES)
+			printk(KERN_ERR "PCI: Failed to allocate %s resource "
+				"#%d:%llx@%llx for %s\n",
+				res->flags & IORESOURCE_IO ? "I/O" : "mem",
+				resno, (unsigned long long)size,
+				(unsigned long long)res->start, pci_name(dev));
+		else
+			printk("PCI: %s resource #%d:%llx@%llx for %s "
+				"was not allocated.\n",
+				res->flags & IORESOURCE_IO ? "I/O" : "mem",
+				resno, (unsigned long long)size,
+				(unsigned long long)res->start, pci_name(dev));
+	} else if (resno < PCI_BRIDGE_RESOURCES || resno > PCI_NUM_RESOURCES) {
 		pci_update_resource(dev, res, resno);
 	}
 

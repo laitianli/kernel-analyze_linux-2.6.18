@@ -332,6 +332,7 @@
 #define  PCI_EXP_TYPE_UPSTREAM	0x5	/* Upstream Port */
 #define  PCI_EXP_TYPE_DOWNSTREAM 0x6	/* Downstream Port */
 #define  PCI_EXP_TYPE_PCI_BRIDGE 0x7	/* PCI/PCI-X Bridge */
+#define  PCI_EXP_TYPE_RC_END	0x9	/* Root Complex Integrated Endpoint */
 #define PCI_EXP_FLAGS_SLOT	0x0100	/* Slot implemented */
 #define PCI_EXP_FLAGS_IRQ	0x3e00	/* Interrupt message number */
 #define PCI_EXP_DEVCAP		4	/* Device capabilities */
@@ -378,6 +379,12 @@
 #define  PCI_EXP_RTCTL_CRSSVE	0x10	/* CRS Software Visibility Enable */
 #define PCI_EXP_RTCAP		30	/* Root Capabilities */
 #define PCI_EXP_RTSTA		32	/* Root Status */
+#define PCI_EXP_DEVCAP2		36	/* Device Capabilities 2 */
+#define  PCI_EXP_DEVCAP2_ARI	0x20	/* Alternative Routing-ID */
+#define PCI_EXP_DEVCTL2		40	/* Device Control 2 */
+#define  PCI_EXP_DEVCTL2_ARI	0x20	/* Alternative Routing-ID */
+#define PCI_EXP_LNKCTL2		48	/* Link Control 2 */
+#define PCI_EXP_SLTCTL2		56	/* Slot Control 2 */
 
 /* Extended Capabilities (PCI-X 2.0 and Express) */
 #define PCI_EXT_CAP_ID(header)		(header & 0x0000ffff)
@@ -388,6 +395,10 @@
 #define PCI_EXT_CAP_ID_VC	2
 #define PCI_EXT_CAP_ID_DSN	3
 #define PCI_EXT_CAP_ID_PWR	4
+#define PCI_EXT_CAP_ID_ACS	13
+#define PCI_EXT_CAP_ID_ARI	14
+#define PCI_EXT_CAP_ID_ATS	15
+#define PCI_EXT_CAP_ID_SRIOV	16
 
 /* Advanced Error Reporting */
 #define PCI_ERR_UNCOR_STATUS	4	/* Uncorrectable Error Status */
@@ -462,5 +473,99 @@
 #define  PCI_PWR_DATA_RAIL(x)	(((x) >> 18) & 7)   /* Power Rail */
 #define PCI_PWR_CAP		12	/* Capability */
 #define  PCI_PWR_CAP_BUDGET(x)	((x) & 1)	/* Included in system budget */
+
+/*
+ * Hypertransport sub capability types
+ *
+ * Unfortunately there are both 3 bit and 5 bit capability types defined
+ * in the HT spec, catering for that is a little messy. You probably don't
+ * want to use these directly, just use pci_find_ht_capability() and it
+ * will do the right thing for you.
+ */
+#define HT_3BIT_CAP_MASK	0xE0
+#define HT_CAPTYPE_SLAVE	0x00	/* Slave/Primary link configuration */
+#define HT_CAPTYPE_HOST		0x20	/* Host/Secondary link configuration */
+
+#define HT_5BIT_CAP_MASK	0xF8
+#define HT_CAPTYPE_IRQ		0x80	/* IRQ Configuration */
+#define HT_CAPTYPE_REMAPPING_40	0xA0	/* 40 bit address remapping */
+#define HT_CAPTYPE_REMAPPING_64 0xA2	/* 64 bit address remapping */
+#define HT_CAPTYPE_UNITID_CLUMP	0x90	/* Unit ID clumping */
+#define HT_CAPTYPE_EXTCONF	0x98	/* Extended Configuration Space Access */
+#define HT_CAPTYPE_MSI_MAPPING	0xA8	/* MSI Mapping Capability */
+#define  HT_MSI_FLAGS		0x02		/* Offset to flags */
+#define  HT_MSI_FLAGS_ENABLE	0x1		/* Mapping enable */
+#define  HT_MSI_FLAGS_FIXED	0x2		/* Fixed mapping only */
+#define  HT_MSI_FIXED_ADDR	0x00000000FEE00000ULL	/* Fixed addr */
+#define  HT_MSI_ADDR_LO		0x04		/* Offset to low addr bits */
+#define  HT_MSI_ADDR_LO_MASK	0xFFF00000	/* Low address bit mask */
+#define  HT_MSI_ADDR_HI		0x08		/* Offset to high addr bits */
+#define HT_CAPTYPE_DIRECT_ROUTE	0xB0	/* Direct routing configuration */
+#define HT_CAPTYPE_VCSET	0xB8	/* Virtual Channel configuration */
+#define HT_CAPTYPE_ERROR_RETRY	0xC0	/* Retry on error configuration */
+#define HT_CAPTYPE_GEN3		0xD0	/* Generation 3 hypertransport configuration */
+#define HT_CAPTYPE_PM		0xE0	/* Hypertransport powermanagement configuration */
+
+/* Alternative Routing-ID Interpretation */
+#define PCI_ARI_CAP		0x04	/* ARI Capability Register */
+#define  PCI_ARI_CAP_MFVC	0x0001	/* MFVC Function Groups Capability */
+#define  PCI_ARI_CAP_ACS	0x0002	/* ACS Function Groups Capability */
+#define  PCI_ARI_CAP_NFN(x)	(((x) >> 8) & 0xff) /* Next Function Number */
+#define PCI_ARI_CTRL		0x06	/* ARI Control Register */
+#define  PCI_ARI_CTRL_MFVC	0x0001	/* MFVC Function Groups Enable */
+#define  PCI_ARI_CTRL_ACS	0x0002	/* ACS Function Groups Enable */
+#define  PCI_ARI_CTRL_FG(x)	(((x) >> 4) & 7) /* Function Group */
+
+/* Address Translation Service */
+#define PCI_ATS_CAP		0x04	/* ATS Capability Register */
+#define  PCI_ATS_CAP_QDEP(x)	((x) & 0x1f)	/* Invalidate Queue Depth */
+#define  PCI_ATS_MAX_QDEP	32	/* Max Invalidate Queue Depth */
+#define PCI_ATS_CTRL		0x06	/* ATS Control Register */
+#define  PCI_ATS_CTRL_ENABLE	0x8000	/* ATS Enable */
+#define  PCI_ATS_CTRL_STU(x)	((x) & 0x1f)	/* Smallest Translation Unit */
+#define  PCI_ATS_MIN_STU	12	/* shift of minimum STU block */
+
+/* Single Root I/O Virtualization */
+#define PCI_SRIOV_CAP		0x04	/* SR-IOV Capabilities */
+#define  PCI_SRIOV_CAP_VFM	0x01	/* VF Migration Capable */
+#define  PCI_SRIOV_CAP_INTR(x)	((x) >> 21) /* Interrupt Message Number */
+#define PCI_SRIOV_CTRL		0x08	/* SR-IOV Control */
+#define  PCI_SRIOV_CTRL_VFE	0x01	/* VF Enable */
+#define  PCI_SRIOV_CTRL_VFM	0x02	/* VF Migration Enable */
+#define  PCI_SRIOV_CTRL_INTR	0x04	/* VF Migration Interrupt Enable */
+#define  PCI_SRIOV_CTRL_MSE	0x08	/* VF Memory Space Enable */
+#define  PCI_SRIOV_CTRL_ARI	0x10	/* ARI Capable Hierarchy */
+#define PCI_SRIOV_STATUS	0x0a	/* SR-IOV Status */
+#define  PCI_SRIOV_STATUS_VFM	0x01	/* VF Migration Status */
+#define PCI_SRIOV_INITIAL_VF	0x0c	/* Initial VFs */
+#define PCI_SRIOV_TOTAL_VF	0x0e	/* Total VFs */
+#define PCI_SRIOV_NUM_VF	0x10	/* Number of VFs */
+#define PCI_SRIOV_FUNC_LINK	0x12	/* Function Dependency Link */
+#define PCI_SRIOV_VF_OFFSET	0x14	/* First VF Offset */
+#define PCI_SRIOV_VF_STRIDE	0x16	/* Following VF Stride */
+#define PCI_SRIOV_VF_DID	0x1a	/* VF Device ID */
+#define PCI_SRIOV_SUP_PGSIZE	0x1c	/* Supported Page Sizes */
+#define PCI_SRIOV_SYS_PGSIZE	0x20	/* System Page Size */
+#define PCI_SRIOV_BAR		0x24	/* VF BAR0 */
+#define  PCI_SRIOV_NUM_BARS	6	/* Number of VF BARs */
+#define PCI_SRIOV_VFM		0x3c	/* VF Migration State Array Offset*/
+#define  PCI_SRIOV_VFM_BIR(x)	((x) & 7)	/* State BIR */
+#define  PCI_SRIOV_VFM_OFFSET(x) ((x) & ~7)	/* State Offset */
+#define  PCI_SRIOV_VFM_UA	0x0	/* Inactive.Unavailable */
+#define  PCI_SRIOV_VFM_MI	0x1	/* Dormant.MigrateIn */
+#define  PCI_SRIOV_VFM_MO	0x2	/* Active.MigrateOut */
+#define  PCI_SRIOV_VFM_AV	0x3	/* Active.Available */
+
+/* Access Control Service */
+#define PCI_ACS_CAP		0x04	/* ACS Capability Register */
+#define  PCI_ACS_SV		0x01	/* Source Validation */
+#define  PCI_ACS_TB		0x02	/* Translation Blocking */
+#define  PCI_ACS_RR		0x04	/* P2P Request Redirect */
+#define  PCI_ACS_CR		0x08	/* P2P Completion Redirect */
+#define  PCI_ACS_UF		0x10	/* Upstream Forwarding */
+#define  PCI_ACS_EC		0x20	/* P2P Egress Control */
+#define  PCI_ACS_DT		0x40	/* Direct Translated P2P */
+#define PCI_ACS_CTRL		0x06	/* ACS Control Register */
+#define PCI_ACS_EGRESS_CTL_V	0x08	/* ACS Egress Control Vector */
 
 #endif /* LINUX_PCI_REGS_H */
