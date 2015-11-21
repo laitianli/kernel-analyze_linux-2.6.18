@@ -1,0 +1,7 @@
+修改点：
+1.函数ata_scsiop_read_cap（）添加：
+	if(is_port(dev->link->ap,"MEM-0") && !(dev->flags & ATA_DFLAG_LBA) && !ata_ncq_enabled(dev))
+		last_lba *= 512;
+2.函数ata_scsiop_inq_std()添加：
+	if(is_port(args->dev->link->ap,"MEM-0"))
+		hdr[0] = TYPE_MEM;

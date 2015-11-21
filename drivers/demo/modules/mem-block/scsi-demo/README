@@ -1,0 +1,13 @@
+1.设置三个环境变量
+	  export KERD=/home/laitianli/loongson/loongson-linux-2.6.36-3
+	  export ARCH=mips
+	  export CROSS_COMPILE=mips64el-linux-
+2.修改内核代码:
+	include/scsi/scsi.h
+		#define TYPE_MEM			0x10
+	drivers/scsi/scsi_scan.c:scsi_add_lun:803
+		case TYPE_MEM://add ltl
+3.编译:分别编译两个模块:scsi-demo和sm-demo
+4.加载:
+	#insmod scsi-demo.ko
+	#insmod sm-demo.ko
