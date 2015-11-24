@@ -53,10 +53,10 @@ pbus_assign_resources_sorted(struct pci_bus *bus)
 
 	head.next = NULL;
 	
-	//把设备链中的在bios中没有分配资源的pci设备以升序存放到资源列表resource_list中
+	/*把设备链中的在bios中没有分配资源的pci设备以升序存放到资源列表resource_list中*/
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		u16 class = dev->class >> 8;
-		//排除pci桥、主桥、PIC
+		/*排除pci桥、主桥、PIC*/
 		/* Don't touch classless devices or host bridges or ioapics.  */
 		if (class == PCI_CLASS_NOT_DEFINED ||
 		    class == PCI_CLASS_BRIDGE_HOST)
@@ -74,7 +74,7 @@ pbus_assign_resources_sorted(struct pci_bus *bus)
 
 		pdev_sort_resources(dev, &head);
 	}
-	//为还没有分配资源的设备分配资源。
+	/*为还没有分配资源的设备分配资源。*/
 	for (list = head.next; list;) {
 		res = list->res;
 		idx = res - &list->dev->resource[0];
@@ -232,8 +232,8 @@ pci_setup_bridge(struct pci_bus *bus)
    prefetchable memory ranges. If not, the respective
    base/limit registers must be read-only and read as 0. */
 /**ltl
-功能:检查桥设备是否支持io/mem/prefetch三个空间。
-*/
+ *功能:检查桥设备是否支持io/mem/prefetch三个空间。
+ */
 static void __devinit
 pci_bridge_check_ranges(struct pci_bus *bus)
 {
@@ -246,7 +246,7 @@ pci_bridge_check_ranges(struct pci_bus *bus)
 	b_res[1].flags |= IORESOURCE_MEM;
 
 	pci_read_config_word(bridge, PCI_IO_BASE, &io);
-	if (!io) {//获取IO空间大小
+	if (!io) {/*获取IO空间大小*/
 		pci_write_config_word(bridge, PCI_IO_BASE, 0xf0f0);
 		pci_read_config_word(bridge, PCI_IO_BASE, &io);
  		pci_write_config_word(bridge, PCI_IO_BASE, 0x0);
@@ -259,7 +259,7 @@ pci_bridge_check_ranges(struct pci_bus *bus)
 	if (bridge->vendor == PCI_VENDOR_ID_DEC && bridge->device == 0x0001)
 		return;
 	pci_read_config_dword(bridge, PCI_PREF_MEMORY_BASE, &pmem);
-	if (!pmem) {//获取PRE MEM空间大小
+	if (!pmem) {/*获取PRE MEM空间大小*/
 		pci_write_config_dword(bridge, PCI_PREF_MEMORY_BASE,
 					       0xfff0fff0);
 		pci_read_config_dword(bridge, PCI_PREF_MEMORY_BASE, &pmem);
@@ -461,9 +461,9 @@ pci_bus_size_cardbus(struct pci_bus *bus)
 	}
 }
 /**ltl
-功能:为各个桥设备分配资源，这个是从树的叶子节点到根节点。因为在第一次扫描时，已经建立起了一棵PCI树
-参数:
-*/
+ *功能:为各个桥设备分配资源，这个是从树的叶子节点到根节点。因为在第一次扫描时，已经建立起了一棵PCI树
+ *参数:
+ */
 void __devinit
 pci_bus_size_bridges(struct pci_bus *bus)
 {
@@ -471,22 +471,22 @@ pci_bus_size_bridges(struct pci_bus *bus)
 	unsigned long mask, prefmask;
 
 	list_for_each_entry(dev, &bus->devices, bus_list) {
-		struct pci_bus *b = dev->subordinate;//桥设备子总线
-		if (!b)//如果此域为空，则说明dev非桥设备
+		struct pci_bus *b = dev->subordinate;/*桥设备子总线*/
+		if (!b)/*如果此域为空，则说明dev非桥设备*/
 			continue;
 
 		switch (dev->class >> 8) {
 		case PCI_CLASS_BRIDGE_CARDBUS:
 			pci_bus_size_cardbus(b);
 			break;
-		//
+
 		case PCI_CLASS_BRIDGE_PCI:
 		default:
 			pci_bus_size_bridges(b);
 			break;
 		}
 	}
-	//递归结束条件
+	/*递归结束条件*/
 	/* The root bus? */
 	if (!bus->self)/*对非根总线,此域指向所属的桥设备；对根总线，此域为空*/
 		return;
@@ -497,9 +497,9 @@ pci_bus_size_bridges(struct pci_bus *bus)
 		break;
 
 	case PCI_CLASS_BRIDGE_PCI:
-		pci_bridge_check_ranges(bus);//检查桥是否支持IO/MEM/PREFETCH
+		pci_bridge_check_ranges(bus);/* 检查桥是否支持IO/MEM/PREFETCH */
 	default:
-		pbus_size_io(bus);//io大小
+		pbus_size_io(bus);/* io大小 */
 		/* If the bridge supports prefetchable range, size it
 		   separately. If it doesn't, or its prefetchable window
 		   has already been allocated by arch code, try
@@ -548,8 +548,8 @@ pci_bus_assign_resources(struct pci_bus *bus)
 }
 EXPORT_SYMBOL(pci_bus_assign_resources);
 /**ltl
-功能:分配pci设备的资源空间。
-*/
+ *功能:分配pci设备的资源空间。
+ */
 void __init
 pci_assign_unassigned_resources(void)
 {
@@ -557,13 +557,13 @@ pci_assign_unassigned_resources(void)
 
 	/* Depth first, calculate sizes and alignments of all
 	   subordinate buses. */
-	//为PCI桥设备分配资源空间(io/mem/prefetch)，而非bar0和bar1
+	/* 为PCI桥设备分配资源空间(io/mem/prefetch)，而非bar0和bar1 */
 	list_for_each_entry(bus, &pci_root_buses, node) {
 		pci_bus_size_bridges(bus);
 	}
 	/* Depth last, allocate resources and update the hardware. */
 	list_for_each_entry(bus, &pci_root_buses, node) {
-		pci_bus_assign_resources(bus);//<这个还没有看明白>
-		pci_enable_bridges(bus);//使能桥设备
+		pci_bus_assign_resources(bus);	/* 将PCI桥的资源窗口写入寄存器 */
+		pci_enable_bridges(bus);		/*使能桥设备*/
 	}
 }

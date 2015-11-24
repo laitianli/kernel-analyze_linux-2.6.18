@@ -128,15 +128,20 @@ struct pci_ats;
 struct pci_dev {
 	/* 一个连接件，用此域把所有的pci_dev链入到pci_devices全局列表中 */
 	struct list_head global_list;	/* node in list of all PCI devices */
+	/* 做为连接件将此设备插入到pci_bus:devices */
 	struct list_head bus_list;	/* node in per-bus list */
+	/* 此设备挂接的总线对象(包括总线号) */
 	struct pci_bus	*bus;		/* bus this device is on */
+	/* 如果此设备是一个桥设备，则此域为桥引出的总线对象 */
 	struct pci_bus	*subordinate;	/* bus this device bridges to */
 
 	void		*sysdata;	/* hook for sys-specific extension */
 	struct proc_dir_entry *procent;	/* device entry in /proc/bus/pci */
-
+	/* 设备号:功能号 */
 	unsigned int	devfn;		/* encoded device & function index */
+	/* 厂商ID */
 	unsigned short	vendor;
+	/* 设备ID */
 	unsigned short	device;
 	unsigned short	subsystem_vendor;
 	unsigned short	subsystem_device;
@@ -173,8 +178,9 @@ struct pci_dev {
 	 * directly, use the values stored here. They might be different!
 	 */
 	unsigned int	irq;
-	/* [0~5]->bar0~bar5;[6]->rom;如果为桥设备，[7~9]与此桥设备引出的总线对象pci_bus的[0~2]相同(pci_read_bridge_bases) */
-	/* 即[7]:io windows,[8]:mem windows,[9]:prefetch mem windows */
+	/* [0~5]->bar0~bar5;[6]->rom;如果为桥设备，[7~9]与此桥设备引出的总线对象pci_bus的[0~2]相同(pci_read_bridge_bases)
+	 * 即[7]:io windows,[8]:mem windows,[9]:prefetch mem windows 
+	 */
 	struct resource resource[DEVICE_COUNT_RESOURCE]; /* I/O and memory regions + expansion ROMs */
 
 	/* These fields are used by common fixups */
@@ -281,9 +287,9 @@ struct pci_bus {
 	struct list_head node;		/* node in list of buses */
 	/* 指向PCI总线的父总线 */
 	struct pci_bus	*parent;	/* parent bus this bridge is on */
-	/* 连接子总线的链表头 */
+	/* 连接子总线的链表头,连接件为pci_bus:node */
 	struct list_head children;	/* list of child buses */
-	/* 是一个链表头，连接此总线下的PCI设备，包括桥设备 */
+	/* 是一个链表头，连接此总线下的PCI设备，包括桥设备，连接件:pci_dev:bus_list*/
 	struct list_head devices;	/* list of devices on this bus */
 	/* 对非根总线,此域指向所属的桥设备；对根总线，此域为空 */
 	struct pci_dev	*self;		/* bridge device as seen by parent */
@@ -294,10 +300,10 @@ struct pci_bus {
 	struct pci_ops	*ops;		/* configuration access functions */
 	void		*sysdata;	/* hook for sys-specific extension */
 	struct proc_dir_entry *procdir;	/* directory entry in /proc/bus/pci */
-
+	/* PCI总线号 */
 	unsigned char	number;		/* bus number */
 	unsigned char	primary;	/* number of primary bridge */
-	unsigned char	secondary;	/* number of secondary bridge */
+	unsigned char	secondary;	/* number of secondary bridge */ /* 对PCI root，此值为number */
 	unsigned char	subordinate;	/* max number of subordinate buses */
 
 	char		name[48];

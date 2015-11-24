@@ -240,10 +240,10 @@ EXPORT_SYMBOL_GPL(pci_assign_resource_fixed);
 
 /* Sort resources by alignment */
 /**ltl
-功能:把设备中的资源以升序插入到资源列表
-参数:dev	->要排序资源的设备对象
-	head	->资源列表头
-*/
+ * 功能:把设备中的资源以升序插入到资源列表
+ * 参数:dev	->要排序资源的设备对象
+ *	head	->资源列表头
+ */
 void __devinit
 pdev_sort_resources(struct pci_dev *dev, struct resource_list *head)
 {
@@ -256,11 +256,11 @@ pdev_sort_resources(struct pci_dev *dev, struct resource_list *head)
 
 		r = &dev->resource[i];
 		r_align = r->end - r->start;
-		//如果设备中资源类型没有确定，或者设备中的资源已经在资源树中，则跳过排序
+		/* 如果设备中资源类型没有确定，或者设备中的资源已经在资源树中，则跳过排序 */
 		if (!(r->flags) || r->parent)
 			continue;
 		
-		//如果设备中资源类型已经确定，但是还没有加入到资源树中，则把这些资源以升序存放到资源列表resource_list中
+		/* 如果设备中资源类型已经确定，但是还没有加入到资源树中，则把这些资源以升序存放到资源列表resource_list中 */
 		if (!r_align) {
 			printk(KERN_WARNING "PCI: Ignore bogus resource %d "
 				"[%llx:%llx] of %s\n",
@@ -268,9 +268,9 @@ pdev_sort_resources(struct pci_dev *dev, struct resource_list *head)
 				(unsigned long long)r->end, pci_name(dev));
 			continue;
 		}
-		//设备资源的大小(只考虑bar0~bar5,rom space)
+		/* 设备资源的大小(只考虑bar0~bar5,rom space) */
 		r_align = (i < PCI_BRIDGE_RESOURCES) ? r_align + 1 : r->start;
-		//把设备的资源插入到适当的位置(升序)
+		/* 把设备的资源插入到适当的位置(升序) */
 		for (list = head; ; list = list->next) {
 			resource_size_t align = 0;
 			struct resource_list *ln = list->next;
@@ -282,7 +282,7 @@ pdev_sort_resources(struct pci_dev *dev, struct resource_list *head)
 					ln->res->end - ln->res->start + 1 :
 					ln->res->start;
 			}
-			//插入设备资源到列表中
+			/* 插入设备资源到列表中 */
 			if (r_align > align) {
 				tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
 				if (!tmp)

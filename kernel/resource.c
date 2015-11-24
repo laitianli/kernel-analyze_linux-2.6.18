@@ -151,6 +151,7 @@ __initcall(ioresources_init);
 返回值:
 	!NULL	->发生冲突的资源区间
 	NULL	->新的资源区间插入到资源树中。
+说明: <此函数**p这个变量值的理解的难点>
 */
 /* Return the conflict entry if you can't request it */
 static struct resource * __request_resource(struct resource *root, struct resource *new)
@@ -159,25 +160,25 @@ static struct resource * __request_resource(struct resource *root, struct resour
 	resource_size_t end = new->end;
 	struct resource *tmp, **p;
 
-	if (end < start)//资源区间本身要合法
+	if (end < start)/*资源区间本身要合法*/
 		return root;
-	if (start < root->start)//资源区间要落在父资源区间里。
+	if (start < root->start)/*资源区间要落在父资源区间里。*/
 		return root;
 	if (end > root->end)
 		return root;
 	
-	p = &root->child;//获取一个子区间对象
+	p = &root->child;/* 获取一个子区间对象 */
 	for (;;) {
 		tmp = *p;
-		if (!tmp || tmp->start > end) {//说明新资源区间在兄弟列表的最后。此时要把资源插入到父资源的资源树中，并返回NULL
+		if (!tmp || tmp->start > end) {/* 说明新资源区间在兄弟列表的最后。此时要把资源插入到父资源的资源树中，并返回NULL */
 			new->sibling = tmp;
 			*p = new;
 			new->parent = root;
 			return NULL;
 		}
-		//p指向兄弟区间
+		/*p指向兄弟区间*/
 		p = &tmp->sibling;
-		if (tmp->end < start)//新的区间在tmp区间之后
+		if (tmp->end < start)/*新的区间在tmp区间之后*/
 			continue;
 		return tmp;
 	}

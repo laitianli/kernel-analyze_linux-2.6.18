@@ -352,13 +352,13 @@ dev_get_drvdata (struct device *dev)
 	return dev->driver_data;
 }
 
-// <-aaaaaaaa-latianli-2015/04/24-aaa.
+
 static inline void
 dev_set_drvdata (struct device *dev, void *data)
 {
 	dev->driver_data = data;
 }
-// ->aaaaaaaa-latianli
+
 
 static inline int device_is_registered(struct device *dev)
 {

@@ -224,12 +224,12 @@ EXPORT_SYMBOL_GPL(pci_find_ext_capability);
  *  it should be allocated from.
  */
 /**ltl
-功能:检查res资源是否落在其父总线的资源窗口内
-参数:dev	->资源res所性的桥设备对象
-	res	->桥设备的资源对象
-返回值:
-	包括res资源的父资源区间对象
-*/
+ * 功能:检查res资源是否落在其父总线的资源窗口内
+ * 参数:dev	->资源res所性的桥设备对象
+ *	res	->桥设备的资源对象
+ * 返回值:
+ *	包括res资源的父资源区间对象
+ */
 struct resource *
 pci_find_parent_resource(const struct pci_dev *dev, struct resource *res)
 {
@@ -241,13 +241,13 @@ pci_find_parent_resource(const struct pci_dev *dev, struct resource *res)
 		struct resource *r = bus->resource[i];
 		if (!r)
 			continue;
-		//不落在某段资源窗口内
+		/*不落在某段资源窗口内*/
 		if (res->start && !(res->start >= r->start && res->end <= r->end))
 			continue;	/* Not contained */
-		//res或者r是IO/MEM类型，这种也不合法。???????
+		/*res或者r是IO/MEM类型，这种也不合法。??????? */
 		if ((res->flags ^ r->flags) & (IORESOURCE_IO | IORESOURCE_MEM))
 			continue;	/* Wrong type */
-		//不是PREFETCH资源
+		/*不是PREFETCH资源*/
 		if (!((res->flags ^ r->flags) & IORESOURCE_PREFETCH))
 			return r;	/* Exact match */
 		if ((res->flags & IORESOURCE_PREFETCH) && !(r->flags & IORESOURCE_PREFETCH))

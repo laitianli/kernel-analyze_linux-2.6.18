@@ -110,7 +110,12 @@ static void __devinit pcibios_fixup_ghosts(struct pci_bus *b)
  *  Called after each bus is probed, but before its children
  *  are examined.
  */
-
+/**ltl
+ * 功能: 读取PCI桥资源窗口
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void __devinit  pcibios_fixup_bus(struct pci_bus *b)
 {
 	pcibios_fixup_ghosts(b);
@@ -146,7 +151,12 @@ static struct dmi_system_id __devinitdata pciprobe_dmi_table[] = {
 #endif		/* __i386__ */
 	{}
 };
-
+/**ltl
+ * 功能: 扫描pci root
+ * 参数: busnum根总线编号
+ * 返回值:
+ * 说明:
+ */
 struct pci_bus * __devinit pcibios_scan_root(int busnum)
 {
 	struct pci_bus *bus = NULL;
@@ -186,7 +196,10 @@ static int __init pcibios_init(void)
 		pci_cache_line_size = 64 >> 2;	/* K7 & K8 */
 	else if (c->x86 > 6 && c->x86_vendor == X86_VENDOR_INTEL)
 		pci_cache_line_size = 128 >> 2;	/* P4 */
-
+	/* 
+	 * 先检查bios是否已经成功分配PCI设备的BAR空间及PCI桥的资源窗口
+	 * 若成功分配，则将其插入到系统的资源管理器中。
+	 */
 	pcibios_resource_survey();
 
 #ifdef CONFIG_PCI_BIOS

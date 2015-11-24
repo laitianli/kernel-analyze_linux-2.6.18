@@ -10,12 +10,12 @@
 static __init int pci_access_init(void)
 {
 #ifdef CONFIG_PCI_MMCONFIG
-	pci_mmcfg_init();//初始化增强配置访问方式
+	pci_mmcfg_init();/*初始化增强配置访问方式*/
 #endif
 	if (raw_pci_ops)
 		return 0;
 #ifdef CONFIG_PCI_BIOS
-	pci_pcbios_init();//利用bios接口提供API来访问配置
+	pci_pcbios_init();/* 利用bios接口提供API来访问配置 */
 #endif
 	/*
 	 * don't check for raw_pci_ops here because we want pcbios as last
@@ -24,7 +24,7 @@ static __init int pci_access_init(void)
 	 * fails.
 	 */
 #ifdef CONFIG_PCI_DIRECT
-	pci_direct_init();//利用config1或者config2访问
+	pci_direct_init();/* 利用config1或者config2访问 */
 #endif
 	return 0;
 }

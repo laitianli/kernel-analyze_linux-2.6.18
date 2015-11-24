@@ -576,7 +576,12 @@ static int msi_lookup_vector(struct pci_dev *dev, int type)
 
 	return -EACCES;
 }
-
+/**ltl
+ * 功能: 统计系统中支持MSI/MSIx的设备个数
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void pci_scan_msi_device(struct pci_dev *dev)
 {
 	if (!dev)

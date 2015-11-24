@@ -94,8 +94,8 @@ pcibios_align_resource(void *data, struct resource *res,
  *	    as well.
  */
 /**ltl
-功能:检查总线树中的PCI桥的资源在bios分配了的是否是合法的。
-参数:bus_list	->总线列表。
+ * 功能:检查总线树中的PCI桥的资源区间(IO base/IO limit、Memery base/Memery limit)在bios分配了的是否是合法的。
+ * 参数:bus_list	->总线列表。
 */
 static void __init pcibios_allocate_bus_resources(struct list_head *bus_list)
 {
@@ -105,15 +105,16 @@ static void __init pcibios_allocate_bus_resources(struct list_head *bus_list)
 	struct resource *r, *pr;
 
 	/* Depth-First Search on bus tree */
-	//深度遍历总线列表
+	/*深度遍历总线列表*/
 	list_for_each_entry(bus, bus_list, node) {
-		if ((dev = bus->self)) {//总线所属的桥设备
-			for (idx = PCI_BRIDGE_RESOURCES; idx < PCI_NUM_RESOURCES; idx++) {//资源窗口在[7,8,9,10]中
+		if ((dev = bus->self)) {/*总线所属的桥设备*/
+			for (idx = PCI_BRIDGE_RESOURCES; idx < PCI_NUM_RESOURCES; idx++) {/*资源窗口在[7,8,9,10]中*/
 				r = &dev->resource[idx];
-				if (!r->flags)//不存在
+				if (!r->flags)/*不存在*/
 					continue;
-				pr = pci_find_parent_resource(dev, r);//检查资源窗口是否落在父的资源窗口中。
-				if (!r->start || !pr || request_resource(pr, r) < 0) {//r资源不在父的资源窗口中，或者已经在父资源窗口中，但是发生的冲突(资源区间有部分或者全部在资源树中)。
+				pr = pci_find_parent_resource(dev, r);/*检查资源窗口是否落在父的资源窗口中。*/
+				/*资源不在父的资源窗口中，或者已经在父资源窗口中，但是发生的冲突(资源区间有部分或者全部在资源树中)。*/
+				if (!r->start || !pr || request_resource(pr, r) < 0) {
 					printk(KERN_ERR "PCI: Cannot allocate resource region %d of bridge %s\n", idx, pci_name(dev));
 					/* Something is wrong with the region.
 					   Invalidate the resource to prevent child
@@ -126,10 +127,10 @@ static void __init pcibios_allocate_bus_resources(struct list_head *bus_list)
 	}
 }
 /**ltl
-功能:检查PCI设备/PCI桥的bar空间是否合法。 /bin/echo
-参数:pass	->0:表示要此次是去检查已经启用的设备
-		  1:表示此次是去检查还没有启用的设备
-返回值:
+ * 功能:检查PCI设备/PCI桥的bar空间是否合法。 /bin/echo
+ * 参数:pass	->0:表示要此次是去检查已经启用的设备
+ *		  1:表示此次是去检查还没有启用的设备
+ * 返回值:
 */
 static void __init pcibios_allocate_resources(int pass)
 {
@@ -137,17 +138,17 @@ static void __init pcibios_allocate_resources(int pass)
 	int idx, disabled;
 	u16 command;
 	struct resource *r, *pr;
-	 //遍历所有的PCI设备
+	 /*遍历所有的PCI设备*/
 	for_each_pci_dev(dev) {
-		//读取命令寄存器
+		/*读取命令寄存器*/
 		pci_read_config_word(dev, PCI_COMMAND, &command);
-		for(idx = 0; idx < 6; idx++) {//检查每一个bar空间
+		for(idx = 0; idx < 6; idx++) {/*检查PCI设备每一个bar空间*/
 			r = &dev->resource[idx];
 			if (r->parent)		/* Already allocated */
 				continue;
 			if (!r->start)		/* Address not assigned at all */
 				continue;
-			//设备是否启用
+			/*设备是否启用*/
 			if (r->flags & IORESOURCE_IO)
 				disabled = !(command & PCI_COMMAND_IO);
 			else
@@ -155,7 +156,7 @@ static void __init pcibios_allocate_resources(int pass)
 			if (pass == disabled) {
 				DBG("PCI: Resource %08lx-%08lx (f=%lx, d=%d, p=%d)\n",
 				    r->start, r->end, r->flags, disabled, pass);
-				pr = pci_find_parent_resource(dev, r);//
+				pr = pci_find_parent_resource(dev, r);
 				
 				if (!pr || request_resource(pr, r) < 0) {
 					printk(KERN_ERR "PCI: Cannot allocate resource region %d of device %s\n", idx, pci_name(dev));
@@ -165,7 +166,8 @@ static void __init pcibios_allocate_resources(int pass)
 				}
 			}
 		}
-		if (!pass) {//如果是第一次的话，为什么要禁用rom空间呢?(是不是先禁用掉，到具体要用的驱动才去开启?)
+		/*如果是第一次的话，为什么要禁用rom空间呢?(是不是先禁用掉，到具体要用的驱动才去开启?)*/
+		if (!pass) {
 			r = &dev->resource[PCI_ROM_RESOURCE];
 			if (r->flags & IORESOURCE_ROM_ENABLE) {
 				/* Turn the ROM off, leave the resource region, but keep it unregistered. */
@@ -179,13 +181,16 @@ static void __init pcibios_allocate_resources(int pass)
 	}
 }
 /**ltl
-功能:分配在bios没有为pci设备分配资源的设备的资源。
-*/
+ * 功能:分配在bios没有为pci设备分配资源的设备的资源。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int __init pcibios_assign_resources(void)
 {
 	struct pci_dev *dev = NULL;
 	struct resource *r, *pr;
-	//pci设备的rom空间使用bios分配的。
+	/*pci设备的rom空间使用bios分配的。*/
 	if (!(pci_probe & PCI_ASSIGN_ROMS)) {
 		/* Try to use BIOS settings for ROMs, otherwise let
 		   pci_assign_unassigned_resources() allocate the new
@@ -201,23 +206,10 @@ static int __init pcibios_assign_resources(void)
 			}
 		}
 	}
-	//分配pci设备资源
+	/*分配pci设备资源*/
 	pci_assign_unassigned_resources();
 
 	return 0;
-}
-/**ltl
-功能:检查PCI桥/PCI设备的资源在bios是否已经成功分配，或者分配是否合法。
-*/
-void __init pcibios_resource_survey(void)
-{
-	DBG("PCI: Allocating resources\n");
-	//检查桥的资源窗口(即pci桥中的[iobase/mem/prefetch]三种资源)
-	pcibios_allocate_bus_resources(&pci_root_buses);
-	//检查已经启用的pci设备(包括PCI桥)的bar空间
-	pcibios_allocate_resources(0);
-	//检查还没有启用的PCI设备(包括PCI桥)bar空间。
-	pcibios_allocate_resources(1);
 }
 
 /**
@@ -225,6 +217,33 @@ void __init pcibios_resource_survey(void)
  * give a chance for motherboard reserve resources
  */
 fs_initcall(pcibios_assign_resources);
+
+/**ltl
+ * 功能: 检查PCI桥/PCI设备的资源在bios是否已经成功分配，或者分配是否合法。
+ *       若BIOS已经成功配置，将其插入到系统的资源管理器中
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
+void __init pcibios_resource_survey(void)
+{
+	DBG("PCI: Allocating resources\n");
+	/*
+	 * 检查桥的资源窗口(即pci桥中的[io/mem/prefetch]三种资源窗口)
+	 * 若BIOS已经成功配置，将资源窗口插入到系统的资源管理器中。
+	 */
+	pcibios_allocate_bus_resources(&pci_root_buses);
+	/*
+	 * 检查已经启用的pci设备(包括PCI桥)的bar空间
+	 * 若BIOS已经成功配置，将已经启动用的PCI设备(包括PCI桥)的BAR空间插入到资源管理器中
+	 */
+	pcibios_allocate_resources(0);
+	/*
+	 * 检查还没有启用的PCI设备(包括PCI桥)bar空间。
+	 * 若BIOS已经成功配置，将还末启动用的PCI设备(包括PCI桥)的BAR空间插入到资源管理器中
+	 */
+	pcibios_allocate_resources(1);
+}
 
 /**ltl
 功能:使能PCI设备的bar空间
