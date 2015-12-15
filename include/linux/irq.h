@@ -143,7 +143,7 @@ struct irq_chip {
  * Pad this out to 32 bytes for cache and indexing reasons.
  */
 /**ltl
- * 功能:linux kernel 用这个数据结构来描述224-1个可编程中断(中断号描述符)
+ * 功能:linux kernel 用这个数据结构来描述(224-1)个可编程中断(中断号描述符)
  * 注: ____cacheline_aligned表示这个数据结构以32字节对齐(cache line size)
  */
 struct irq_desc {

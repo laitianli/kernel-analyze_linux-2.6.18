@@ -1238,7 +1238,7 @@ void __init trap_init(void)
 		set_in_cr4(X86_CR4_OSXMMEXCPT);
 		printk("done.\n");
 	}
-	//对系统门的初始化
+	/* 对系统门的初始化 */
 	set_system_gate(SYSCALL_VECTOR,&system_call);
 
 	/*

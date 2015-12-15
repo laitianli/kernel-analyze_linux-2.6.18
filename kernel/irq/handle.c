@@ -251,7 +251,7 @@ fastcall unsigned int __do_IRQ(unsigned int irq, struct pt_regs *regs)
 		spin_lock(&desc->lock);
 		if (!noirqdebug)
 			note_interrupt(irq, desc, action_ret, regs);
-		if (likely(!(desc->status & IRQ_PENDING)))//当设置了IRQ_PENDING标志后，可以避免同一中断线的中断嵌套。
+		if (likely(!(desc->status & IRQ_PENDING)))/*当设置了IRQ_PENDING标志后，可以避免同一中断线的中断嵌套。*/
 			break;
 		desc->status &= ~IRQ_PENDING;
 	}

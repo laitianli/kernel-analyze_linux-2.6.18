@@ -1091,19 +1091,19 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	 * Switch from PIC to APIC mode.
 	 */
 	connect_bsp_APIC();
-	setup_local_APIC();
+	setup_local_APIC(); /* 使能local ACPI */
 
 	if (GET_APIC_ID(apic_read(APIC_ID)) != boot_cpu_id) {
 		panic("Boot APIC ID in local APIC unexpected (%d vs %d)",
 		      GET_APIC_ID(apic_read(APIC_ID)), boot_cpu_id);
 		/* Or can we switch back to PIC here? */
 	}
-
+	/* 使能IO APIC */
 	/*
 	 * Now start the IO-APICs
 	 */
 	if (!skip_ioapic_setup && nr_ioapics)
-		setup_IO_APIC();
+		setup_IO_APIC();	/* 对IO-APIC编程 */
 	else
 		nr_ioapics = 0;
 

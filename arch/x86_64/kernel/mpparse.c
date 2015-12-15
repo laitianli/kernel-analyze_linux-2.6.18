@@ -32,7 +32,7 @@
 #include <asm/acpi.h>
 
 /* Have we found an MP table */
-int smp_found_config;
+int smp_found_config;	/* 是否找到SMP的config */
 unsigned int __initdata maxcpus = NR_CPUS;
 
 int acpi_found_madt;
@@ -41,13 +41,15 @@ int acpi_found_madt;
  * Various Linux-internal data structures created from the
  * MP-table.
  */
-unsigned char apic_version [MAX_APICS];
+unsigned char apic_version [MAX_APICS];/**/
+/* 记录系统<总线编号:总线类型> */
 unsigned char mp_bus_id_to_type [MAX_MP_BUSSES] = { [0 ... MAX_MP_BUSSES-1] = -1 }; /* 值:mp_bustype */
+/* 记录系统<总线编号:PCI总线编号> */
 int mp_bus_id_to_pci_bus [MAX_MP_BUSSES] = { [0 ... MAX_MP_BUSSES-1] = -1 };
-
+/* 系统总线数 */
 static int mp_current_pci_id = 0;
 /* I/O APIC entries */
-struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS];
+struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS]; /* ioapic表 */
 
 /* # of MP IRQ source entries */
 struct mpc_config_intsrc mp_irqs[MAX_IRQ_SOURCES];
@@ -55,14 +57,15 @@ struct mpc_config_intsrc mp_irqs[MAX_IRQ_SOURCES];
 /* MP IRQ source entries */
 int mp_irq_entries; /* 系统中中断源个数 */
 
-int nr_ioapics;
+int nr_ioapics;	/* ioapic芯片总数 */
 int pic_mode;
-unsigned long mp_lapic_addr = 0;
+/* 每个cpu中对应的local apic的物理地址 */
+unsigned long mp_lapic_addr = 0; /* local */
 
 
 
 /* Processor that is doing the boot up */
-unsigned int boot_cpu_id = -1U;
+unsigned int boot_cpu_id = -1U; /* 在SMP系统中，用于启动的CPU ID */
 /* Internal processor count */
 unsigned int num_processors __initdata = 0;
 
@@ -104,14 +107,19 @@ static int __init mpf_checksum(unsigned char *mp, int len)
 
 	return sum & 0xFF;
 }
-
+/**ltl
+ * 功能: 保存cpu config
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void __cpuinit MP_processor_info (struct mpc_config_processor *m)
 {
 	int cpu;
 	unsigned char ver;
 	cpumask_t tmp_map;
 
-	if (!(m->mpc_cpuflag & CPU_ENABLED)) {
+	if (!(m->mpc_cpuflag & CPU_ENABLED)) { /* CPU无效 */
 		disabled_cpus++;
 		return;
 	}
@@ -127,16 +135,16 @@ static void __cpuinit MP_processor_info (struct mpc_config_processor *m)
 	       (m->mpc_cpufeature & CPU_MODEL_MASK)>>4,
 		m->mpc_apicver);
 
-	if (m->mpc_cpuflag & CPU_BOOTPROCESSOR) {
+	if (m->mpc_cpuflag & CPU_BOOTPROCESSOR) { /* 此CPU用于bst (bootstap process) */
 		Dprintk("    Bootup CPU\n");
-		boot_cpu_id = m->mpc_apicid;
+		boot_cpu_id = m->mpc_apicid; /* 保存用于启动的cpu ID */
 	}
 	if (num_processors >= NR_CPUS) {
 		printk(KERN_WARNING "WARNING: NR_CPUS limit of %i reached."
 			" Processor ignored.\n", NR_CPUS);
 		return;
 	}
-
+	/* 递增CPU数 */
 	num_processors++;
 	cpus_complement(tmp_map, cpu_present_map);
 	cpu = first_cpu(tmp_map);
@@ -173,7 +181,12 @@ static void __cpuinit MP_processor_info (struct mpc_config_processor *m)
 	cpu_set(cpu, cpu_possible_map);
 	cpu_set(cpu, cpu_present_map);
 }
-
+/**ltl
+ * 功能: 记录<系统总线ID:总线类型>
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void __init MP_bus_info (struct mpc_config_bus *m)
 {
 	char str[7];
@@ -196,12 +209,17 @@ static void __init MP_bus_info (struct mpc_config_bus *m)
 		printk(KERN_ERR "Unknown bustype %s\n", str);
 	}
 }
-
+/**ltl
+ * 功能: 保存io apic配置
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void __init MP_ioapic_info (struct mpc_config_ioapic *m)
 {
 	if (!(m->mpc_flags & MPC_APIC_USABLE))
 		return;
-
+	/* I/O APIC #1 Version 32 at 0xFEC00000. */
 	printk("I/O APIC #%d Version %d at 0x%X.\n",
 		m->mpc_apicid, m->mpc_apicver, m->mpc_apicaddr);
 	if (nr_ioapics >= MAX_IO_APICS) {
@@ -217,7 +235,12 @@ static void __init MP_ioapic_info (struct mpc_config_ioapic *m)
 	mp_ioapics[nr_ioapics] = *m;
 	nr_ioapics++;
 }
-
+/**ltl
+ * 功能: 记录int config信息
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void __init MP_intsrc_info (struct mpc_config_intsrc *m)
 {
 	mp_irqs [mp_irq_entries] = *m;
@@ -228,10 +251,37 @@ static void __init MP_intsrc_info (struct mpc_config_intsrc *m)
 			m->mpc_srcbusirq, m->mpc_dstapic, m->mpc_dstirq);
 	if (++mp_irq_entries >= MAX_IRQ_SOURCES)
 		panic("Max # of irq sources exceeded!!\n");
+	/*
+		[    0.000000] Int: type 3, pol 1, trig 1, bus 18, IRQ 00, APIC ID 1, APIC INT 00
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 01, APIC ID 1, APIC INT 01
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 00, APIC ID 1, APIC INT 02
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 03, APIC ID 1, APIC INT 03
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 04, APIC ID 1, APIC INT 04
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 05, APIC ID 1, APIC INT 05
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 06, APIC ID 1, APIC INT 06
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 07, APIC ID 1, APIC INT 07
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 08, APIC ID 1, APIC INT 08
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 74, APIC ID 1, APIC INT 17
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 64, APIC ID 1, APIC INT 14
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 68, APIC ID 1, APIC INT 10
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 0c, APIC ID 1, APIC INT 0c
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 0d, APIC ID 1, APIC INT 0d
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 0e, APIC ID 1, APIC INT 0e
+		[    0.000000] Int: type 0, pol 1, trig 1, bus 18, IRQ 0f, APIC ID 1, APIC INT 0f
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 70, APIC ID 1, APIC INT 11
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 73, APIC ID 1, APIC INT 13
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 7d, APIC ID 1, APIC INT 13
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 0, IRQ 7e, APIC ID 1, APIC INT 12
+		[    0.000000] Int: type 0, pol 3, trig 3, bus 6, IRQ 00, APIC ID 1, APIC INT 13
+	 */
 }
 
 static void __init MP_lintsrc_info (struct mpc_config_lintsrc *m)
 {
+	/*
+		[    0.000000] Lint: type 3, pol 1, trig 1, bus 18, IRQ 00, APIC ID ff, APIC LINT 00
+		[    0.000000] Lint: type 1, pol 1, trig 1, bus 18, IRQ 00, APIC ID ff, APIC LINT 01
+	*/
 	Dprintk("Lint: type %d, pol %d, trig %d, bus %d,"
 		" IRQ %02x, APIC ID %x, APIC LINT %02x\n",
 			m->mpc_irqtype, m->mpc_irqflag & 3,
@@ -255,7 +305,16 @@ static void __init MP_lintsrc_info (struct mpc_config_lintsrc *m)
 /*
  * Read/parse the MPC
  */
-
+/**ltl
+ * 功能: 解析SMP的mp config
+ * 参数:
+ * 返回值:
+ * 说明: 解析配置类型分别:1.process config (per cpu)
+ *					2.bus config (per bus)
+ *					3.ioapic config (per ioapic)
+ *					4.int config(per bus interrupt source)
+ *					5.MP_LINTSRC config (per system interrup source)
+ */
 static int __init smp_read_mpc(struct mp_config_table *mpc)
 {
 	char str[16];
@@ -285,34 +344,35 @@ static int __init smp_read_mpc(struct mp_config_table *mpc)
 	}
 	memcpy(str,mpc->mpc_oem,8);
 	str[8]=0;
-	printk(KERN_INFO "OEM ID: %s ",str);
+	/* OEM ID: GIGABYTE Product ID: GA-6FASV-RH  APIC at: 0xFEE00000 */
+	printk(KERN_INFO "OEM ID: %s ",str); /* GIGABYTE */
 
 	memcpy(str,mpc->mpc_productid,12);
 	str[12]=0;
 	printk("Product ID: %s ",str);
 
 	printk("APIC at: 0x%X\n",mpc->mpc_lapic);
-
+	/* 设置local apic的物理地址 */
 	/* save the local APIC address, it might be non-default */
 	if (!acpi_lapic)
-	mp_lapic_addr = mpc->mpc_lapic;
+		mp_lapic_addr = mpc->mpc_lapic;
 
 	/*
 	 *	Now process the configuration blocks.
 	 */
 	while (count < mpc->mpc_length) {
 		switch(*mpt) {
-			case MP_PROCESSOR:
+			case MP_PROCESSOR: /* cpu processor config */
 			{
 				struct mpc_config_processor *m=
 					(struct mpc_config_processor *)mpt;
-				if (!acpi_lapic)
-				MP_processor_info(m);
+				if (!acpi_lapic)	/* 如果ACPI 没有MADT表 */
+					MP_processor_info(m);
 				mpt += sizeof(*m);
 				count += sizeof(*m);
 				break;
 			}
-			case MP_BUS:
+			case MP_BUS: /* bus config */
 			{
 				struct mpc_config_bus *m=
 					(struct mpc_config_bus *)mpt;
@@ -321,7 +381,7 @@ static int __init smp_read_mpc(struct mp_config_table *mpc)
 				count += sizeof(*m);
 				break;
 			}
-			case MP_IOAPIC:
+			case MP_IOAPIC: /* io apci config */
 			{
 				struct mpc_config_ioapic *m=
 					(struct mpc_config_ioapic *)mpt;
@@ -330,7 +390,7 @@ static int __init smp_read_mpc(struct mp_config_table *mpc)
 				count+=sizeof(*m);
 				break;
 			}
-			case MP_INTSRC:
+			case MP_INTSRC: /* int config */
 			{
 				struct mpc_config_intsrc *m=
 					(struct mpc_config_intsrc *)mpt;
@@ -340,7 +400,7 @@ static int __init smp_read_mpc(struct mp_config_table *mpc)
 				count+=sizeof(*m);
 				break;
 			}
-			case MP_LINTSRC:
+			case MP_LINTSRC: /*lint config*/
 			{
 				struct mpc_config_lintsrc *m=
 					(struct mpc_config_lintsrc *)mpt;
@@ -351,7 +411,7 @@ static int __init smp_read_mpc(struct mp_config_table *mpc)
 			}
 		}
 	}
-	clustered_apic_check();
+	clustered_apic_check(); /* 设置全局变更genapic */
 	if (!num_processors)
 		printk(KERN_ERR "SMP mptable: no processors registered!\n");
 	return num_processors;
@@ -514,10 +574,17 @@ static inline void __init construct_default_ISA_mptable(int mpc_default_type)
 	}
 }
 
+/* SMP配置表起始地址结构 */
 static struct intel_mp_floating *mpf_found;
 
 /*
  * Scan the memory blocks for an SMP configuration block.
+ */
+/**ltl
+ * 功能: 读取SMP配置信息
+ * 参数:
+ * 返回值:
+ * 说明: 配置信息包括:CPU config、bus config、ioacpi config、int config、lint config
  */
 void __init get_smp_config (void)
 {
@@ -557,6 +624,7 @@ void __init get_smp_config (void)
 		 * Read the physical hardware table.  Anything here will
 		 * override the defaults.
 		 */
+		/* 读取硬件信息 */
 		if (!smp_read_mpc(phys_to_virt(mpf->mpf_physptr))) {
 			smp_found_config = 0;
 			printk(KERN_ERR "BIOS bug, MP table errors detected!...\n");
@@ -589,7 +657,12 @@ void __init get_smp_config (void)
 	 * Only use the first configuration found.
 	 */
 }
-
+/**ltl
+ * 功能: 扫描SMP配置
+ * 参数:
+ * 返回值:
+ * 说明: 从指定内存区域找到相应的配置，并做校验
+ */
 static int __init smp_scan_config (unsigned long base, unsigned long length)
 {
 	extern void __bad_mpf_size(void); 
@@ -604,9 +677,9 @@ static int __init smp_scan_config (unsigned long base, unsigned long length)
 		mpf = (struct intel_mp_floating *)bp;
 		if ((*bp == SMP_MAGIC_IDENT) &&
 			(mpf->mpf_length == 1) &&
-			!mpf_checksum((unsigned char *)bp, 16) &&
-			((mpf->mpf_specification == 1)
-				|| (mpf->mpf_specification == 4)) ) {
+			!mpf_checksum((unsigned char *)bp, 16) && /* 所有字段之和为0 */
+			((mpf->mpf_specification == 1) /*v1.1*/
+				|| (mpf->mpf_specification == 4)/* v1.4 */) ) {
 
 			smp_found_config = 1;
 			reserve_bootmem_generic(virt_to_phys(mpf), PAGE_SIZE);
@@ -620,7 +693,12 @@ static int __init smp_scan_config (unsigned long base, unsigned long length)
 	}
 	return 0;
 }
-
+/**ltl
+ * 功能: 扫描SMP配置
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void __init find_intel_smp (void)
 {
 	unsigned int address;
@@ -663,6 +741,12 @@ void __init find_intel_smp (void)
 
 /*
  * - Intel MP Configuration Table
+ */
+/**ltl
+ * 功能: 查找SMP配置表
+ * 参数:
+ * 返回值:
+ * 说明: 只与local APIC有关的配置信息
  */
 void __init find_smp_config (void)
 {

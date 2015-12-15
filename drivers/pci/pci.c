@@ -527,11 +527,11 @@ int
 pci_enable_device_bars(struct pci_dev *dev, int bars)
 {
 	int err;
-	//设置pci设备的电源状态(D0~D3,D0功耗最大，D3功耗最小)
+	/* 设置pci设备的电源状态(D0~D3,D0功耗最大，D3功耗最小) */
 	err = pci_set_power_state(dev, PCI_D0);
 	if (err < 0 && err != -EIO)
 		return err;
-	//使能设备的bar空间
+	/* 使能设备的bar空间 */
 	err = pcibios_enable_device(dev, bars);
 	if (err < 0)
 		return err;
@@ -547,22 +547,22 @@ pci_enable_device_bars(struct pci_dev *dev, int bars)
  *  Beware, this function can fail.
  */
 /**ltl
-功能:使能PCI设备
-参数:dev	->PCI设备
-返回值:
-*/
+ * 功能:使能PCI设备
+ * 参数:dev	->PCI设备
+ * 返回值:
+ */
 int
 pci_enable_device(struct pci_dev *dev)
 {
 	int err;
-	//已经启用过
+	/*已经启用过*/
 	if (dev->is_enabled)
 		return 0;
-	//使能bar空间。
+	/*使能bar空间。*/
 	err = pci_enable_device_bars(dev, (1 << PCI_NUM_RESOURCES) - 1);
 	if (err)
 		return err;
-	//修改PCI设备配置空间中的interrupt line寄存器
+	/*修改PCI设备配置空间中的interrupt line寄存器*/
 	pci_fixup_device(pci_fixup_enable, dev);
 	dev->is_enabled = 1;
 	return 0;

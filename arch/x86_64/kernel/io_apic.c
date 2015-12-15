@@ -61,6 +61,7 @@ static DEFINE_SPINLOCK(vector_lock);
 /*
  * # of IRQ routing registers
  */
+/* io-apic对应的pin脚数，如[0]=23,[1]=16,表示第0个io-apic有23个pin脚，第1个io-apic有16个pin脚 */
 int nr_ioapic_registers[MAX_IO_APICS];
 
 /*
@@ -192,7 +193,7 @@ static void unmask_IO_APIC_irq (unsigned int irq)
 	__unmask_IO_APIC_irq(irq);
 	spin_unlock_irqrestore(&ioapic_lock, flags);
 }
-
+/* disable irq in the io-apic irq-routing table */
 static void clear_IO_APIC_pin(unsigned int apic, unsigned int pin)
 {
 	struct IO_APIC_route_entry entry;
@@ -209,7 +210,7 @@ static void clear_IO_APIC_pin(unsigned int apic, unsigned int pin)
 	 * Disable it in the IO-APIC irq-routing table:
 	 */
 	memset(&entry, 0, sizeof(entry));
-	entry.mask = 1;
+	entry.mask = 1;	/* disable irq */
 	spin_lock_irqsave(&ioapic_lock, flags);
 	io_apic_write(apic, 0x10 + 2 * pin, *(((int *)&entry) + 0));
 	io_apic_write(apic, 0x11 + 2 * pin, *(((int *)&entry) + 1));
@@ -467,12 +468,12 @@ static int __init find_isa_irq_apic(int irq, int type)
  */
 static int pin_2_irq(int idx, int apic, int pin);
 /**ltl
- * 功能: 根据PCI设备的引脚，获取其在IOAPIC下的中断号
+ * 功能: 根据PCI设备号及引脚号，获取其在IOAPIC统一编号的中断号(GSI)
  * 参数: bus	->总线号
- *		slot	->槽位
+ *		slot	->PCI设备号
  *		pin	->PCI设备的引脚
- * 返回值: IOAPIC下的中断号
- * 说明:
+ * 返回值: IOAPIC下的中断号(GSI)
+ * 说明: 这个函数获取的中断号并不是CPU所能识别的中断向量号，而是IOAPIC统一编址后的中断引脚号(GSI)
  */
 int IO_APIC_get_PCI_irq_vector(int bus, int slot, int pin)
 {
@@ -492,16 +493,16 @@ int IO_APIC_get_PCI_irq_vector(int bus, int slot, int pin)
 			    mp_irqs[i].mpc_dstapic == MP_APIC_ALL)
 				break;
 
-		if ((mp_bus_id_to_type[lbus] == MP_BUS_PCI) &&
-		    !mp_irqs[i].mpc_irqtype &&
-		    (bus == lbus) &&
-		    (slot == ((mp_irqs[i].mpc_srcbusirq >> 2) & 0x1f))) {
-			int irq = pin_2_irq(i,apic,mp_irqs[i].mpc_dstirq);
+		if ((mp_bus_id_to_type[lbus] == MP_BUS_PCI) &&	/* 总线类型为PCI */
+		    !mp_irqs[i].mpc_irqtype &&					/* 中断类型必须为INT */
+		    (bus == lbus) &&							/* 总线号一致 */
+		    (slot == ((mp_irqs[i].mpc_srcbusirq >> 2) & 0x1f))) { /* PCI设备号与MP配置中的设备号要一致 */
+			int irq = pin_2_irq(i,apic,mp_irqs[i].mpc_dstirq); /* 获取GSI号 */
 
 			if (!(apic || IO_APIC_IRQ(irq)))
 				continue;
 
-			if (pin == (mp_irqs[i].mpc_srcbusirq & 3))
+			if (pin == (mp_irqs[i].mpc_srcbusirq & 3)) /* 引脚号(即pci设备的引脚号与MP配置的引脚号一致) */
 				return irq;
 			/*
 			 * Use the first all-but-pin matching entry as a
@@ -732,6 +733,7 @@ int gsi_irq_sharing(int gsi)
 
 	tries = NR_IRQS;
   try_again:
+  	
 	vector = assign_irq_vector(gsi);
 
 	/*
@@ -766,10 +768,13 @@ int gsi_irq_sharing(int gsi)
 	return i;
 }
 /**ltl
- * 功能: PCI设备引用到IOAPIC引脚的转换
- * 参数:
+ * 功能: 根据<apicID,pin>获取IO-APIC统一编号的引脚号(GSI)
+ * 参数:	idx	->
+ *		apic	-> IO-APIC编号
+ *		pin	-> 第apic个IO-APIC芯片内的pin脚
  * 返回值:
- * 说明:
+ * 说明: 系统号的所有IO-APIC芯片的pin脚是统一编号的，如:第0个IO-APIC有24个pin脚，则pin脚本编号为0~23
+ *		第1个IO-APIC有16个pin脚,则pin脚编号为24~39
  */
 static int pin_2_irq(int idx, int apic, int pin)
 {
@@ -797,6 +802,7 @@ static int pin_2_irq(int idx, int apic, int pin)
 			 * PCI IRQs are mapped in order
 			 */
 			i = irq = 0;
+			/* 找到统一编号io-apic的pin脚 */
 			while (i < apic)
 				irq += nr_ioapic_registers[i++];
 			irq += pin;
@@ -851,13 +857,17 @@ static inline int IO_APIC_irq_trigger(int irq)
 u8 irq_vector[NR_IRQ_VECTORS] __read_mostly = { FIRST_DEVICE_VECTOR , 0 };
 /**ltl
  * 功能:将外部设备使用的GSI号与IO APIC中的REDIR_TBL表建立联系
- * 参数: irq	->GSI号
+ * 参数: irq	->GSI号(IO-APIC芯片的pin脚编号)
  * 返回值:
  * 说明:
  */
 int assign_irq_vector(int irq)
 {
-	/* 外设使用的第一个中断号:0x31(63) */
+	/* 外设使用的第一个中断号:0x31(49), 为什么要从49开始分配呢? 原因如下:
+	 * 01~15:为异常中断号，
+	 * 16~31:为intel保留,
+	 * 32~48:为使用8259A控制器的中断号  
+	 */
 	static int current_vector = FIRST_DEVICE_VECTOR, offset = 0;
 	unsigned long flags;
 	int vector;
@@ -865,12 +875,12 @@ int assign_irq_vector(int irq)
 	BUG_ON(irq != AUTO_ASSIGN && (unsigned)irq >= NR_IRQ_VECTORS);
 
 	spin_lock_irqsave(&vector_lock, flags);
-
+	/* 获取pin脚号为irq对应的中断向量号 */
 	if (irq != AUTO_ASSIGN && IO_APIC_VECTOR(irq) > 0) {
 		spin_unlock_irqrestore(&vector_lock, flags);
 		return IO_APIC_VECTOR(irq);
 	}
-next:
+next: /* 为pin脚号为irq分配一个中断向量号 */
 	current_vector += 8;
 	if (current_vector == IA32_SYSCALL_VECTOR)
 		goto next;
@@ -882,7 +892,7 @@ next:
 	}
 
 	vector = current_vector;
-	vector_irq[vector] = irq; /* 给全局变量赋值,(注:vector才是操作系统所能操作的中断号) */
+	vector_irq[vector] = irq; /* 给全局变量赋值(注:vector才是操作系统所能操作的中断号) */
 	if (irq != AUTO_ASSIGN) /* 非自动分配中断向量 */
 		IO_APIC_VECTOR(irq) = vector; /* 中断向量 */
 
@@ -904,7 +914,7 @@ static struct hw_interrupt_type ioapic_edge_type;
  *		vector	-> 
  *		trigger	-> 中断触发方式
  * 返回值:
- * 说明:
+ * 说明: 中断描述符全局变量irq_desc数组下标就是CPU能构识别的中断向量号
  */
 static void ioapic_register_intr(int irq, int vector, unsigned long trigger)
 {
@@ -920,7 +930,12 @@ static void ioapic_register_intr(int irq, int vector, unsigned long trigger)
 	/* 将中断向量加入到中断路由表中，中断处理函数为interrupt[index] (注:此全局变量在i8259.c中初始化)*/
 	set_intr_gate(vector, interrupt[idx]);
 }
-
+/**ltl
+ * 功能: 对IO-APIC中断向量表进行编程
+ * 参数:
+ * 返回值:
+ * 说明: 设置IO UNIT interrupt source registers(<84289DX spec.pdf> P28)
+ */
 static void __init setup_IO_APIC_irqs(void)
 {
 	struct IO_APIC_route_entry entry;
@@ -937,7 +952,7 @@ static void __init setup_IO_APIC_irqs(void)
 		 */
 		memset(&entry,0,sizeof(entry));
 
-		entry.delivery_mode = INT_DELIVERY_MODE;
+		entry.delivery_mode = INT_DELIVERY_MODE; /* apic_physflat */
 		entry.dest_mode = INT_DEST_MODE;
 		entry.mask = 0;				/* enable IRQ */
 		entry.dest.logical.logical_dest = cpu_mask_to_apicid(TARGET_CPUS);
@@ -960,22 +975,24 @@ static void __init setup_IO_APIC_irqs(void)
 			entry.mask = 1;
 			entry.dest.logical.logical_dest = cpu_mask_to_apicid(TARGET_CPUS);
 		}
-
-		irq = pin_2_irq(idx, apic, pin);
+		/* 根据<apic编号:引脚号>获取统一编号后的引脚号 */
+		irq = pin_2_irq(idx, apic, pin); 
 		add_pin_to_irq(irq, apic, pin);
 
 		if (!apic && !IO_APIC_IRQ(irq))
 			continue;
-
+		/* 设置中断向量(irq为所有IO-APIC芯片的pin脚统一编址后的pin脚编号，vector为cpu能够识别的中断向量号) */
 		if (IO_APIC_IRQ(irq)) {
 			vector = assign_irq_vector(irq);
 			entry.vector = vector;
-
+			/* 设置中断号为vector的中断向量描述符 */
 			ioapic_register_intr(irq, vector, IOAPIC_AUTO);
 			if (!apic && (irq < 16))
 				disable_8259A_irq(irq);
 		}
 		spin_lock_irqsave(&ioapic_lock, flags);
+		
+		/* 写入寄存器 */
 		io_apic_write(apic, 0x11+2*pin, *(((int *)&entry)+1));
 		io_apic_write(apic, 0x10+2*pin, *(((int *)&entry)+0));
 		set_native_irq_info(irq, TARGET_CPUS);
@@ -1301,7 +1318,12 @@ void __apicdebuginit print_PIC(void)
 }
 
 #endif  /*  0  */
-
+/**ltl
+ * 功能: 使能IO APIC
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void __init enable_IO_APIC(void)
 {
 	union IO_APIC_reg_01 reg_01;
@@ -1320,12 +1342,14 @@ static void __init enable_IO_APIC(void)
 	/*
 	 * The number of IO-APIC IRQ registers (== #pins):
 	 */
+	/* 获取每个IO-APIC对应的pin脚数 */
 	for (apic = 0; apic < nr_ioapics; apic++) {
 		spin_lock_irqsave(&ioapic_lock, flags);
 		reg_01.raw = io_apic_read(apic, 1);
 		spin_unlock_irqrestore(&ioapic_lock, flags);
-		nr_ioapic_registers[apic] = reg_01.bits.entries+1;
+		nr_ioapic_registers[apic] = reg_01.bits.entries+1; /* reg_01.bits.entries=23 */
 	}
+	/* 查找使用ExtINT mode使用的pin脚 */
 	for(apic = 0; apic < nr_ioapics; apic++) {
 		int pin;
 		/* See if any of the pins is in ExtINT mode */
@@ -1692,7 +1716,12 @@ static struct hw_interrupt_type ioapic_level_type __read_mostly = {
 #endif
 	.retrigger	= ioapic_retrigger,
 };
-
+/**ltl
+ * 功能: 检查中断号有没有相应的中断向量号
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline void init_IO_APIC_traps(void)
 {
 	int irq;
@@ -1722,7 +1751,7 @@ static inline void init_IO_APIC_traps(void)
 			 * interrupt if we can..
 			 */
 			if (irq < 16)
-				make_8259A_irq(irq);
+				make_8259A_irq(irq); /* 此中断号由8259A中断控制器直接传给Local APIC控制器 */
 			else
 				/* Strange. Oh, well.. */
 				irq_desc[irq].chip = &no_irq_type;
@@ -1885,7 +1914,7 @@ static inline void check_timer(void)
 
 	if (pin1 == 0)
 		timer_uses_ioapic_pin_0 = 1;
-
+	/* TIMER: vector=0x31 apic1=0 pin1=2 apic2=0 pin2=0 */
 	apic_printk(APIC_VERBOSE,KERN_INFO "..TIMER: vector=0x%02X apic1=%d pin1=%d apic2=%d pin2=%d\n",
 		vector, apic1, pin1, apic2, pin2);
 
@@ -1896,7 +1925,7 @@ static inline void check_timer(void)
 		unmask_IO_APIC_irq(0);
 		if (!no_timer_check && timer_irq_works()) {
 			nmi_watchdog_default();
-			if (nmi_watchdog == NMI_IO_APIC) {
+			if (nmi_watchdog == NMI_IO_APIC) { /* nmi_watchdog=2 */
 				disable_8259A_irq(0);
 				setup_nmi();
 				enable_8259A_irq(0);
@@ -1918,7 +1947,7 @@ static inline void check_timer(void)
 		/*
 		 * legacy devices should be connected to IO APIC #0
 		 */
-		setup_ExtINT_IRQ0_pin(apic2, pin2, vector);
+		setup_ExtINT_IRQ0_pin(apic2, pin2, vector); /* 对IRQ0时间中断编程 */
 		if (timer_irq_works()) {
 			apic_printk(APIC_VERBOSE," works.\n");
 			nmi_watchdog_default();
@@ -1984,9 +2013,15 @@ __setup("no_timer_check", notimercheck);
  *   for any interrupt handling anyway.
  */
 #define PIC_IRQS	(1<<2)
-
+/**ltl
+ * 功能: 使能ioapic
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void __init setup_IO_APIC(void)
 {
+	/* 使能IO APIC芯片 */
 	enable_IO_APIC();
 
 	if (acpi_ioapic)
@@ -2002,7 +2037,9 @@ void __init setup_IO_APIC(void)
 	if (!acpi_ioapic)
 		setup_ioapic_ids_from_mpc();
 	sync_Arb_IDs();
+	/* 对IO-APIC的中断向量编程 */
 	setup_IO_APIC_irqs();
+	
 	init_IO_APIC_traps();
 	check_timer();
 	if (!acpi_ioapic)

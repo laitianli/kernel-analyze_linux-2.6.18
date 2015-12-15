@@ -313,10 +313,10 @@ __setup("rdinit=", rdinit_setup);
 
 #ifdef CONFIG_X86_LOCAL_APIC
 /**ltl
- * 功能:
+ * 功能: 
  * 参数:
  * 返回值:
- * 说明:
+ * 说明: 仅用于单处理器
  */
 static void __init smp_init(void)
 {
@@ -704,12 +704,12 @@ static int init(void * unused)
 	 * can be found.
 	 */
 	child_reaper = current;
-
+	/* 对Local APIC和IO-APIC进行编程  */
 	smp_prepare_cpus(max_cpus);
 
 	do_pre_smp_initcalls();
 
-	smp_init();
+	smp_init();	/* 初始化另外的cpu */
 	sched_init_smp();
 
 	cpuset_init_smp();

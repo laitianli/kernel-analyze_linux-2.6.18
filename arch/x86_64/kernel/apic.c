@@ -302,6 +302,12 @@ extern void __error_in_apic_c (void);
 /*
  * An initial setup of the virtual wire mode.
  */
+/**ltl
+ * 功能: 启动用中断模式:virtual wire mode
+ * 参数: 
+ * 返回值: 
+ * 说明: bsp:bootstap process
+ */
 void __init init_bsp_APIC(void)
 {
 	unsigned int value;
@@ -310,7 +316,8 @@ void __init init_bsp_APIC(void)
 	 * Don't do the setup now if we have a SMP BIOS as the
 	 * through-I/O-APIC virtual wire mode might be active.
 	 */
-	if (smp_found_config || !cpu_has_apic)
+	 /* smp_scan_config在函数smp_scan_config中赋值 */
+	if (smp_found_config || !cpu_has_apic) 
 		return;
 
 	value = apic_read(APIC_LVR);
@@ -337,7 +344,12 @@ void __init init_bsp_APIC(void)
 	value = APIC_DM_NMI;
 	apic_write(APIC_LVT1, value);
 }
-
+/**ltl
+ * 功能: 初始化local apic
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void __cpuinit setup_local_APIC (void)
 {
 	unsigned int value, maxlvt;
@@ -695,7 +707,12 @@ void __init init_apic_mappings(void)
  */
 
 #define APIC_DIVISOR 16
-
+/**ltl
+ * 功能: 设置local apic Time base寄存器
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void __setup_APIC_LVTT(unsigned int clocks)
 {
 	unsigned int lvtt_value, tmp_value, ver;
@@ -798,8 +815,8 @@ static int __init calibrate_APIC_clock(void)
 		result = (apic_start - apic) * 1000L / 5;
 	} else
 #endif
-	{
-		rdtscl(tsc_start);
+	{	/* 用rdtsc指令读取时间戳计数器TSC的值(每个时钟，寄存器增一，比如：如果微处理器的主频是1MHZ的话，那么TSC就会在1秒内增加1000000) */
+		rdtscl(tsc_start); 
 
 		do {
 			apic = apic_read(APIC_TMCCT);
@@ -994,7 +1011,7 @@ void smp_apic_timer_interrupt(struct pt_regs *regs)
 	/*
 	 * the NMI deadlock-detector uses this.
 	 */
-	add_pda(apic_timer_irqs, 1);
+	add_pda(apic_timer_irqs, 1);	/* 递增local timer中断计数器(/proc/interrupts可以访问到此值) */
 
 	/*
 	 * NOTE! We'd better ACK the irq immediately,

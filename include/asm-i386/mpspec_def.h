@@ -30,10 +30,10 @@ struct intel_mp_floating
 	unsigned char mpf_feature5;	/* Unused (0)			*/
 };
 
+#define MPC_SIGNATURE "PCMP"
 struct mp_config_table
 {
 	char mpc_signature[4];
-#define MPC_SIGNATURE "PCMP"
 	unsigned short mpc_length;	/* Size of table */
 	char  mpc_spec;			/* 0x01 */
 	char  mpc_checksum;
@@ -99,13 +99,13 @@ struct mpc_config_bus
 #define BUSTYPE_XPRESS	"XPRESS"
 #define BUSTYPE_NEC98	"NEC98"
 
+#define MPC_APIC_USABLE		0x01
 struct mpc_config_ioapic
 {
 	unsigned char mpc_type;
 	unsigned char mpc_apicid;
 	unsigned char mpc_apicver;
 	unsigned char mpc_flags;
-#define MPC_APIC_USABLE		0x01
 	unsigned long mpc_apicaddr;
 };
 

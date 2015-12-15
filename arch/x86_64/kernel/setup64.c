@@ -217,10 +217,10 @@ void __cpuinit cpu_init (void)
 	 */
 	if (cpu)
  		memcpy(cpu_gdt(cpu), cpu_gdt_table, GDT_SIZE);
-
+	/* 将GDT表加载到gdtr寄存器中 */
 	cpu_gdt_descr[cpu].size = GDT_SIZE;
 	asm volatile("lgdt %0" :: "m" (cpu_gdt_descr[cpu]));
-	asm volatile("lidt %0" :: "m" (idt_descr));
+	asm volatile("lidt %0" :: "m" (idt_descr));	/* 将IDT表加载到idtr表中 */
 
 	memset(me->thread.tls_array, 0, GDT_ENTRY_TLS_ENTRIES * 8);
 	syscall_init();

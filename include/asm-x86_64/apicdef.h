@@ -9,10 +9,10 @@
  */
 
 #define		APIC_DEFAULT_PHYS_BASE	0xfee00000
- 
+ /* [31:24]:apic id, [23:00]:reserved id */
 #define		APIC_ID		0x20
 #define			APIC_ID_MASK		(0xFFu<<24)
-#define			GET_APIC_ID(x)		(((x)>>24)&0xFFu)
+#define			GET_APIC_ID(x)		(((x)>>24)&0xFFu)	
 #define			SET_APIC_ID(x)		(((x)<<24))
 #define		APIC_LVR	0x30
 #define			APIC_LVR_MASK		0xFF00FF
@@ -24,6 +24,7 @@
 #define		APIC_ARBPRI	0x90
 #define			APIC_ARBPRI_MASK	0xFFu
 #define		APIC_PROCPRI	0xA0
+/* End of interrupt register */
 #define		APIC_EOI	0xB0
 #define			APIC_EIO_ACK		0x0		/* Write this to the EOI register */
 #define		APIC_RRR	0xC0
@@ -37,7 +38,7 @@
 #define			APIC_DFR_FLAT			0xFFFFFFFFul
 #define		APIC_SPIV	0xF0
 #define			APIC_SPIV_FOCUS_DISABLED	(1<<9)
-#define			APIC_SPIV_APIC_ENABLED		(1<<8)
+#define			APIC_SPIV_APIC_ENABLED		(1<<8)	/* enable this local APIC */
 #define		APIC_ISR	0x100
 #define		APIC_ISR_NR	0x8	/* Number of 32 bit ISR registers. */
 #define		APIC_TMR	0x180
@@ -78,7 +79,11 @@
 #define		APIC_LVTT	0x320
 #define		APIC_LVTTHMR	0x330
 #define		APIC_LVTPC	0x340
-#define		APIC_LVT0	0x350
+/*
+ * 84289DX spec P16
+ * Local interrupt vector register
+ */
+#define		APIC_LVT0	0x350	
 #define			APIC_LVT_TIMER_BASE_MASK	(0x3<<18)
 #define			GET_APIC_TIMER_BASE(x)		(((x)>>18)&0x3)
 #define			SET_APIC_TIMER_BASE(x)		(((x)<<18))
@@ -86,21 +91,30 @@
 #define			APIC_TIMER_BASE_TMBASE		0x1
 #define			APIC_TIMER_BASE_DIV		0x2
 #define			APIC_LVT_TIMER_PERIODIC		(1<<17)
-#define			APIC_LVT_MASKED			(1<<16)
-#define			APIC_LVT_LEVEL_TRIGGER		(1<<15)
+#define			APIC_LVT_MASKED			(1<<16)	/* 0->enable injection interrupt signal; 1-> disable injection. */
+#define			APIC_LVT_LEVEL_TRIGGER		(1<<15) /* 0->edge sensitive,1->level sensitive */
 #define			APIC_LVT_REMOTE_IRR		(1<<14)
 #define			APIC_INPUT_POLARITY		(1<<13)
-#define			APIC_SEND_PENDING		(1<<12)
+#define			APIC_SEND_PENDING		(1<<12)	/* 1->indicates that the interrupt has been injected. */
 #define			APIC_MODE_MASK			0x700
 #define			GET_APIC_DELIVERY_MODE(x)	(((x)>>8)&0x7)
 #define			SET_APIC_DELIVERY_MODE(x,y)	(((x)&~0x700)|((y)<<8))
 #define				APIC_MODE_FIXED		0x0
+/* deliver the signal on the NMI pin of the local processor.
+ */
 #define				APIC_MODE_NMI		0x4
-#define				APIC_MODE_EXTINT	0x7
+/* deliver the interrupt signal to the INT PIN of the local processor 
+ * as an interrupt that originated in an externally connected(8259A) interrupt controller 
+ */
+#define				APIC_MODE_EXTINT	0x7	
 #define 	APIC_LVT1	0x360
 #define		APIC_LVTERR	0x370
-#define		APIC_TMICT	0x380
-#define		APIC_TMCCT	0x390
+#define		APIC_TMICT	0x380 	/* init count register */
+#define		APIC_TMCCT	0x390	/* current count register */
+/* 82489DX spec P25
+ * [02]: 0->divider from CLK; 1-> from TMBASE
+ * [01:00] 00->devide by 2; 01->devide by 4; 10->devide by 8; 11->devide by 16
+ */
 #define		APIC_TDCR	0x3E0
 #define			APIC_TDR_DIV_TMBASE	(1<<2)
 #define			APIC_TDR_DIV_1		0xB

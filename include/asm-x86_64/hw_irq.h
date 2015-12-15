@@ -75,7 +75,12 @@ struct hw_interrupt_type;
 
 
 #ifndef __ASSEMBLY__
-extern u8 irq_vector[NR_IRQ_VECTORS];
+
+/* 这个数组建立了<中断编号:中断向量号>的一个对应关系，
+ * 其中中断编号为所有IO-APIC芯片pin引脚统一编号后的pin脚号; 
+ * 中断向量号为cpu能够识别的中断向量号。
+ */
+extern u8 irq_vector[NR_IRQ_VECTORS]; 
 #define IO_APIC_VECTOR(irq)	(irq_vector[irq]) /*IOAPIC中断向量数据*/
 #define AUTO_ASSIGN		-1
 

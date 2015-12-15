@@ -828,7 +828,7 @@ static int pcibios_lookup_irq(struct pci_dev *dev, int assign)
 	pin = pin - 1;
 
 	/* Find IRQ routing entry */
-
+	/* 使用了IO-APIC，则pirq_table为NULL(在pcibios_irq_init中设置) */
 	if (!pirq_table)
 		return 0;
 	
@@ -945,7 +945,7 @@ static int pcibios_lookup_irq(struct pci_dev *dev, int assign)
 	return 1;
 }
 /**ltl
- * 功能: 遍历PCI设备，将PCI设备的pin转换成系统可以识别的中断向量号
+ * 功能: 遍历PCI设备，将PCI设备的pin转换成CPU可以识别的中断向量号
  * 参数:
  * 返回值:
  * 说明:
@@ -985,7 +985,7 @@ static void __init pcibios_fixup_irqs(void)
 
 			if (pin) {
 				pin--;		/* interrupt pins are numbered starting from 1 */
-				/* 根据PCI设备的引用获取中断号 */
+				/* 根据PCI<总线号:设备号:中断引脚号>获取IO-APIC统一编址后的中断号(GSI) */
 				irq = IO_APIC_get_PCI_irq_vector(dev->bus->number, PCI_SLOT(dev->devfn), pin);
 	/*
 	 * Busses behind bridges are typically not listed in the MP-table.
@@ -1006,7 +1006,7 @@ static void __init pcibios_fixup_irqs(void)
 				if (irq >= 0) {
 					if (use_pci_vector() &&
 						!platform_legacy_irq(irq))
-						irq = IO_APIC_VECTOR(irq);
+						irq = IO_APIC_VECTOR(irq);	/* 获取CPU可能识别的中断向量号 */
 					/*
 					PCI->APIC IRQ transform: 0000:00:19.0[A] -> IRQ 177
 					PCI->APIC IRQ transform: 0000:00:1a.0[A] -> IRQ 145

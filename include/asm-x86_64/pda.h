@@ -24,7 +24,7 @@ struct x8664_pda {
 	unsigned int __nmi_count;	/* number of NMI on this CPUs */
 	int mmu_state;     
 	struct mm_struct *active_mm;
-	unsigned apic_timer_irqs;
+	unsigned apic_timer_irqs;	/* 本地时钟中断次数 */
 } ____cacheline_aligned_in_smp;
 
 extern struct x8664_pda *_cpu_pda[];

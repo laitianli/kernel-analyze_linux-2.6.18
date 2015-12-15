@@ -9,10 +9,16 @@
  * Discover remaining PCI buses in case there are peer host bridges.
  * We use the number of last PCI bus provided by the PCI BIOS.
  */
+/**ltl
+ * 功能: 扫描系统下的所有总线下的PCI设备
+ * 参数:
+ * 返回值:
+ * 说明: 必须在cmdline中添加字段pci=lastbus=0xff
+ */
 static void __devinit pcibios_fixup_peer_bridges(void)
 {
 	int n, devfn;
-
+	/* 系统存在总线号为0xff，因此要改成pcibios_last_bus > 0xff */
 	if (pcibios_last_bus <= 0 || pcibios_last_bus >= 0xff)
 		return;
 	DBG("PCI: Peer bridge fixup\n");
@@ -32,7 +38,12 @@ static void __devinit pcibios_fixup_peer_bridges(void)
 		}
 	}
 }
-
+/**ltl
+ * 功能: PCI设备扫描的入口
+ * 参数:
+ * 返回值:
+ * 说明: 当系统没有开启ACPI模块的情况下，使用此种方式扫描
+ */
 static int __init pci_legacy_init(void)
 {
 	if (!raw_pci_ops) {

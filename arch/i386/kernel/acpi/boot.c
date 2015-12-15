@@ -67,7 +67,7 @@ int acpi_noirq __initdata;	/* skip ACPI IRQ initialization */
 int acpi_pci_disabled __initdata;	/* skip ACPI PCI scan and IRQ initialization */
 int acpi_ht __initdata = 1;	/* enable HT */
 
-int acpi_lapic;
+int acpi_lapic;	/* 是否解析到local apic信息(ACPI模块解析到MADT表时设置此值) */
 int acpi_ioapic;
 int acpi_strict;
 EXPORT_SYMBOL(acpi_strict);

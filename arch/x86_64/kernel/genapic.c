@@ -113,8 +113,8 @@ void __init clustered_apic_check(void)
 	} else
 		genapic = &apic_cluster;
 
-print:
-	printk(KERN_INFO "Setting APIC routing to %s\n", genapic->name);
+print:/* Setting APIC routing to physical flat */
+	printk(KERN_INFO "Setting APIC routing to %s\n", genapic->name); /* physical flat*/
 }
 
 /* Same for both flat and clustered. */

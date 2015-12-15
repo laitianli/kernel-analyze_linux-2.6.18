@@ -629,7 +629,7 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * Find and reserve possible boot-time SMP configuration:
 	 */
-	find_smp_config();
+	find_smp_config(); /* 查找SMP的配置信息 */
 #endif
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (LOADER_TYPE && INITRD_START) {
@@ -657,7 +657,7 @@ void __init setup_arch(char **cmdline_p)
 
 	paging_init();
 
-	check_ioapic();
+	check_ioapic(); /* 只对Nvidia and VIA boards有效 */
 
 	/*
 	 * set this early, so we dont allocate cpu0
@@ -678,7 +678,7 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * get boot-time SMP configuration:
 	 */
-	if (smp_found_config)
+	if (smp_found_config)	/* 读取smp配置信息(只有acpi模块关闭情况下才有效) */
 		get_smp_config();
 	init_apic_mappings();
 #endif

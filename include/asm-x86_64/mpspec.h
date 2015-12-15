@@ -31,11 +31,10 @@ struct intel_mp_floating
 	unsigned char mpf_feature4;	/* Unused (0)			*/
 	unsigned char mpf_feature5;	/* Unused (0)			*/
 };
-
+#define MPC_SIGNATURE "PCMP"
 struct mp_config_table
 {
 	char mpc_signature[4];
-#define MPC_SIGNATURE "PCMP"
 	unsigned short mpc_length;	/* Size of table */
 	char  mpc_spec;			/* 0x01 */
 	char  mpc_checksum;
@@ -44,7 +43,7 @@ struct mp_config_table
 	unsigned int mpc_oemptr;	/* 0 if not present */
 	unsigned short mpc_oemsize;	/* 0 if not present */
 	unsigned short mpc_oemcount;
-	unsigned int mpc_lapic;	/* APIC address */
+	unsigned int mpc_lapic;	/* APIC address */ /* Local APIC的物理地址，通过此寄存器对LAPIC操作 */
 	unsigned int reserved;
 };
 
@@ -56,27 +55,29 @@ struct mp_config_table
 #define	MP_INTSRC	3
 #define	MP_LINTSRC	4
 
+#define CPU_ENABLED		1	/* Processor is available */
+#define CPU_BOOTPROCESSOR	2	/* Processor is the BP */
+
+#define CPU_STEPPING_MASK 0x0F
+#define CPU_MODEL_MASK	0xF0
+#define CPU_FAMILY_MASK	0xF00
+/* CPU 配置信息 */
 struct mpc_config_processor
 {
 	unsigned char mpc_type;
 	unsigned char mpc_apicid;	/* Local APIC number */
 	unsigned char mpc_apicver;	/* Its versions */
 	unsigned char mpc_cpuflag;
-#define CPU_ENABLED		1	/* Processor is available */
-#define CPU_BOOTPROCESSOR	2	/* Processor is the BP */
-	unsigned int mpc_cpufeature;		
-#define CPU_STEPPING_MASK 0x0F
-#define CPU_MODEL_MASK	0xF0
-#define CPU_FAMILY_MASK	0xF00
+	unsigned int mpc_cpufeature;
 	unsigned int mpc_featureflag;	/* CPUID feature value */
 	unsigned int mpc_reserved[2];
 };
-
+/* 总线的配置信息 */
 struct mpc_config_bus
 {
-	unsigned char mpc_type;
-	unsigned char mpc_busid;
-	unsigned char mpc_bustype[6];
+	unsigned char mpc_type;			/* 配置类型 */
+	unsigned char mpc_busid;		/* 总线编号 */
+	unsigned char mpc_bustype[6]; 	/* 总线名 */
 };
 
 /* List of Bus Type string values, Intel MP Spec. */
@@ -99,25 +100,43 @@ struct mpc_config_bus
 #define BUSTYPE_VME	"VME"
 #define BUSTYPE_XPRESS	"XPRESS"
 
+#define MPC_APIC_USABLE		0x01
+/* ioapic配置信息 */
 struct mpc_config_ioapic
 {
-	unsigned char mpc_type;
-	unsigned char mpc_apicid;
-	unsigned char mpc_apicver;
+	unsigned char mpc_type;	/* 配置类型 */
+	unsigned char mpc_apicid; /* IO-APIC编号 */
+	unsigned char mpc_apicver;	/* 版本号 */
 	unsigned char mpc_flags;
-#define MPC_APIC_USABLE		0x01
-	unsigned int mpc_apicaddr;
+	unsigned int mpc_apicaddr;	/* IO-APIC的物理寄存器地址(通过读写此地址对IO-APIC芯片操作(IO_APIC_BASE)) */
 };
-
+/*
+ * 外设的中断引脚与IOAPIC对应关系的配置信息
+ * <multiprocess specification.pdf> p48
+ */
 struct mpc_config_intsrc
 {
-	unsigned char mpc_type;
-	unsigned char mpc_irqtype;
-	unsigned short mpc_irqflag;
-	unsigned char mpc_srcbus;
-	unsigned char mpc_srcbusirq;
-	unsigned char mpc_dstapic;
-	unsigned char mpc_dstirq;
+	unsigned char mpc_type;		/* 总线类型 */
+	unsigned char mpc_irqtype;	/* 0:int,1:nmi,2:smi,3:ExtINT */
+	/*
+	 * [01:00]=00->conforms to specification of bus
+	 *		 01->active high
+	 *		 10->reserved
+	 *		 11->active low
+	 * [03:02]=00->conforms to specification of bus
+	 *		 01->edge-triggered
+	 *		 10->reserved
+	 *		 11->level-triggered
+	 */
+	unsigned short mpc_irqflag; 
+	unsigned char mpc_srcbus;	/* 总线号(PCI的总线编号) */
+	/* <multiprocess specification.pdf> P87
+	 * [01:00]-> identify the pci interrupt signal, where 00 corresponds to INT_A#,01 conrresponds to INT_B#.
+	 * [06:02]-> give the pci device number
+	 */
+	unsigned char mpc_srcbusirq; 	/* 如果表示PCI设备的中断，则此字段表示PCI设备号及PIN脚 */
+	unsigned char mpc_dstapic; 		/* IO-APIC编号 */
+	unsigned char mpc_dstirq;		/* IO-APIC片内引脚 */
 };
 
 enum mp_irq_source_types {
@@ -131,16 +150,21 @@ enum mp_irq_source_types {
 #define MP_IRQDIR_HIGH		1
 #define MP_IRQDIR_LOW		3
 
-
+#define MP_APIC_ALL	0xFF
+/* 外设的中断引脚与local APIC的对应关系的配置信息 */
 struct mpc_config_lintsrc
 {
 	unsigned char mpc_type;
 	unsigned char mpc_irqtype;
 	unsigned short mpc_irqflag;
 	unsigned char mpc_srcbusid;
-	unsigned char mpc_srcbusirq;
-	unsigned char mpc_destapic;	
-#define MP_APIC_ALL	0xFF
+	
+	/* <multiprocess specification.pdf> P87
+	 * [01:00]-> identify the pci interrupt signal, where 00 corresponds to INT_A#,01 conrresponds to INT_B#.
+	 * [06:02]-> give the pci device number
+	 */
+	unsigned char mpc_srcbusirq;/* 如果表示PCI设备的中断，则此字段表示PCI设备号及PIN脚 */
+	unsigned char mpc_destapic;	/* IO-APIC编号 */
 	unsigned char mpc_destapiclint;
 };
 
@@ -163,7 +187,7 @@ enum mp_bustype {
 	MP_BUS_ISA = 1,
 	MP_BUS_EISA,
 	MP_BUS_PCI,
-	MP_BUS_MCA
+	MP_BUS_MCA	/* MicroChannel Architecture(MCA)Bus */
 };
 extern unsigned char mp_bus_id_to_type [MAX_MP_BUSSES];
 extern int mp_bus_id_to_pci_bus [MAX_MP_BUSSES];

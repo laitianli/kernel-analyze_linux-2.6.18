@@ -343,7 +343,12 @@ spurious_8259A_irq:
 		goto handle_real_irq;
 	}
 }
-
+/**ltl
+ * 功能: 初始化8259A芯片
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void init_8259A(int auto_eoi)
 {
 	unsigned long flags;
@@ -459,7 +464,10 @@ static struct irqaction irq2 = { no_action, 0, CPU_MASK_NONE, "cascade", NULL, N
  * 功能: 设置中断描述符中的中断控制器芯片的处理函数集
  * 参数:
  * 返回值:
- * 说明: 小于16的中断向量使用i8259的处理函数集，其它的先不定义。
+ * 说明: 1.初始化local apic
+ *	    2.初始化8259A芯片
+ *	    3.初始化中断描述符全局数组irq_desc[NR_IRQS]. 主要是用来设定中断控制器的处理函数集
+ * 		 注:小于16的中断向量使用i8259的处理函数集，其它的先不定义。
  */
 void __init init_ISA_irqs (void)
 {
@@ -468,8 +476,8 @@ void __init init_ISA_irqs (void)
 #ifdef CONFIG_X86_LOCAL_APIC
 	init_bsp_APIC();		/* 初始化Local apic */
 #endif
-	init_8259A(0); /* 使能化8259A芯片 */
-
+	init_8259A(0); 			/* 初始化8259A芯片 */
+	
 	for (i = 0; i < NR_IRQS; i++) {
 		irq_desc[i].status = IRQ_DISABLED; /* <什么时候使能呢?> */
 		irq_desc[i].action = NULL;
@@ -556,20 +564,21 @@ device_initcall(init_timer_sysfs);
  * 返回值:
  * 说明: 将大于32的中断向量都加入到中断路由表中，其默认的中断处理函数为interrupt[x]，
  *       在IOAPIC或者MSI初始化或者使能时，会重新设定此中断向量的中断处理函数。如:get_new_vector()/ioapic_register_intr()
+ *       注: 在中断路由表中，外设中断号从32号起，而在中断号描述符irq_desc表，外设的中断号是0，这两者是如何关联起来? (下标一致)
  */
 void __init init_IRQ(void)
 {
 	int i;
-	/* 设置中断描述符中的中断芯片处理函数集 */
+	/* 初始化中断控制器和设置中断描述符中的中断芯片处理函数集 */
 	init_ISA_irqs();
 	/*
 	 * Cover the whole vector space, no vector can escape
 	 * us. (some of these will be overridden and become
 	 * 'special' SMP interrupts)
 	 */
-	/* 设置大于32的中断向量到中断路由表中 */
+	/* 设置大于32的中断向量到中断路由表中(0~19:intel用来处理异常，20~31: intel保留) */
 	for (i = 0; i < (NR_VECTORS - FIRST_EXTERNAL_VECTOR); i++) {
-		int vector = FIRST_EXTERNAL_VECTOR + i;
+		int vector = FIRST_EXTERNAL_VECTOR + i; /* 中断号从32开始 */
 		if (i >= NR_IRQS)
 			break;
 		/* 除了0x80向量(系统调用在trap_init已经添加过)，其它的都添加到中断路由表中 */
@@ -607,8 +616,9 @@ void __init init_IRQ(void)
 	set_intr_gate(THRESHOLD_APIC_VECTOR, threshold_interrupt);
 
 #ifdef CONFIG_X86_LOCAL_APIC
+	/* 时钟中断(jiffies_64)通过此中断更新 */
 	/* self generated IPI for local APIC timer */
-	set_intr_gate(LOCAL_TIMER_VECTOR, apic_timer_interrupt); /* 时钟中断(jiffies_64)通过此中断更新 */
+	set_intr_gate(LOCAL_TIMER_VECTOR, apic_timer_interrupt); 
 
 	/* IPI vectors for APIC spurious and error interrupts */
 	set_intr_gate(SPURIOUS_APIC_VECTOR, spurious_interrupt);

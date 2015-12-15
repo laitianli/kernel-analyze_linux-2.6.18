@@ -1078,6 +1078,7 @@ asmlinkage void math_state_restore(void)
  * 参数:
  * 返回值:
  * 说明: 将0~19号中断、0x80号中断加入到中断向量表中
+ *		中断分类: 中断门、系统中断门、缺陷门、系统缺陷门、任务门
  */
 void __init trap_init(void)
 {
@@ -1111,7 +1112,7 @@ void __init trap_init(void)
 	/*
 	 * Should be a barrier for any external CPU state.
 	 */
-	cpu_init();
+	cpu_init(); /* 把GDT表和IDT表加载到寄存器中 */
 }
 
 

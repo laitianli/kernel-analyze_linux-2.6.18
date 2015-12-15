@@ -33,7 +33,7 @@ enum {
 	GATE_CALL = 0xC,
 }; 	
 
-// 16byte gate
+/* 16B gate */
 struct gate_struct {          
 	u16 offset_low;
 	u16 segment; 
