@@ -1082,6 +1082,20 @@ static inline void put_task_struct(struct task_struct *t)
 #define tsk_used_math(p) ((p)->flags & PF_USED_MATH)
 #define used_math() tsk_used_math(current)
 
+
+#ifdef CONFIG_SMP
+extern int set_cpus_allowed_ptr(struct task_struct *p,
+                                const cpumask_t *new_mask);
+#else
+static inline int set_cpus_allowed_ptr(struct task_struct *p,
+                                       const cpumask_t *new_mask)
+{
+        if (!cpu_isset(0, *new_mask))
+                return -EINVAL;
+        return 0;
+}
+#endif
+
 #ifdef CONFIG_SMP
 extern int set_cpus_allowed(struct task_struct *p, cpumask_t new_mask);
 #else

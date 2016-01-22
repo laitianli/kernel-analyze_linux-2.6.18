@@ -19,6 +19,7 @@
 struct subsystem block_subsys;
 static DEFINE_MUTEX(block_subsys_lock);
 
+/* 块设备的全局列表 */
 /*
  * Can be deleted altogether. Later.
  *
@@ -64,7 +65,7 @@ int register_blkdev(unsigned int major, const char *name)
 	mutex_lock(&block_subsys_lock);
 
 	/* temporary */
-	if (major == 0) {//从全局的数据找到一个没有被用过的
+	if (major == 0) {/* 从全局的数据找到一个没有被用过的主设备号*/
 		for (index = ARRAY_SIZE(major_names)-1; index > 0; index--) {
 			if (major_names[index] == NULL)
 				break;
@@ -79,7 +80,7 @@ int register_blkdev(unsigned int major, const char *name)
 		major = index;
 		ret = major;
 	}
-	//分配对象
+	/* 分配对象 */
 	p = kmalloc(sizeof(struct blk_major_name), GFP_KERNEL);
 	if (p == NULL) {
 		ret = -ENOMEM;
@@ -96,7 +97,7 @@ int register_blkdev(unsigned int major, const char *name)
 			break;
 	}
 	if (!*n)
-		*n = p;//把新分配的对象添加到链表中
+		*n = p;/* 把新分配的对象添加到列表中 */
 	else
 		ret = -EBUSY;
 
@@ -111,7 +112,13 @@ out:
 }
 
 EXPORT_SYMBOL(register_blkdev);
-
+/**ltl
+ * 功能: 反注册块设备的主设备号
+ * 参数: major	->
+ *		name ->
+ * 返回值:
+ * 说明: 将主设备号从全局列表中删除
+ */
 /* todo: make void - error printk here */
 int unregister_blkdev(unsigned int major, const char *name)
 {
@@ -137,7 +144,7 @@ int unregister_blkdev(unsigned int major, const char *name)
 }
 
 EXPORT_SYMBOL(unregister_blkdev);
-
+/* 块设备对象图 */
 static struct kobj_map *bdev_map;
 
 /*
@@ -146,20 +153,19 @@ static struct kobj_map *bdev_map;
  * The hash chain is sorted on range, so that subranges can override.
  */
 /**ltl
-功能：把磁盘设备号与通用磁盘描述符对象关联起来。
-参数：dev:磁盘的设备号
-	  range:设备号总数，也可以理解成分区总数+1
-	  module:模块指针
-	  probe:获取内核对象的回调函数
-	  lock:
-	  data:私有数据成员。在调用这个接口时，这个变量就是与dev关联的内核对象。
-
-*/
+ * 功能：把磁盘设备号与通用磁盘描述符对象关联起来。
+ * 参数：dev:磁盘的设备号
+ *	  range:设备号总数，也可以理解成分区总数+1
+ *	  module:模块指针
+ *	  probe:获取内核对象的回调函数
+ *	  lock:
+ *	  data:私有数据成员。如果dev代表一个具体的块设备，则此域为通用磁盘对象
+ */
 void blk_register_region(dev_t dev, unsigned long range, struct module *module,
 			 struct kobject *(*probe)(dev_t, int *, void *),
 			 int (*lock)(dev_t, void *), void *data)
 {
-	/*bdev_map是一个全局变量，在block/genhd.c-> genhd_device_init()申请,kobj_map函数在drivers/base/map.c中实现*/   
+	/* bdev_map是一个全局变量，在block/genhd.c-> genhd_device_init()申请,kobj_map函数在drivers/base/map.c中实现 */
 	kobj_map(bdev_map, dev, range, module, probe, lock, data);
 }
 
@@ -195,19 +201,20 @@ static int exact_lock(dev_t dev, void *data)
  * with the kernel.
  */
 /**ltl
-功能:把通过alloc_disk()申请的通用磁盘描述符添加到系统中
-参数:disk:通用磁盘描述符
-*/
+ * 功能: 把通过alloc_disk()申请的通用磁盘描述符添加到系统中
+ * 参数: disk:通用磁盘描述符
+ * 说明: 
+ */
 void add_disk(struct gendisk *disk)
 {
-	/*设置GENHD_FL_UP标志*/
+	/* 设置GENHD_FL_UP标志 */
 	disk->flags |= GENHD_FL_UP;
-	/*利用内核映射域（bdev_map）把设备号与内核对象关联起来*/
+	/* 利用内核映射域（bdev_map）把设备号与内核对象关联起来 */
 	blk_register_region(MKDEV(disk->major, disk->first_minor),
 			    disk->minors, NULL, exact_match, exact_lock, disk);
-	/*注册通用磁盘到系统中*/
+	/* 注册通用磁盘到系统中 */
 	register_disk(disk);
-	/*添加通用磁盘的等待队列到sys中*/
+	/* 添加通用磁盘的等待队列到sys中 */
 	blk_register_queue(disk);
 }
 
@@ -231,10 +238,10 @@ void unlink_gendisk(struct gendisk *disk)
  * information for the given device @dev.
  */
 /**ltl
-功能:根据设备号获取通用磁盘描述符
-参数:dev:设备号
-	part[out]:当前设备号所对应的分区号
-返回值:通用磁盘描述符
+ * 功能:根据设备号获取通用磁盘描述符
+ * 参数:dev:设备号
+ *	part[out]:当前设备号所对应的分区号
+ * 返回值:通用磁盘描述符
 */
 struct gendisk *get_gendisk(dev_t dev, int *part)
 {
@@ -330,9 +337,9 @@ static struct kobject *base_probe(dev_t dev, int *part, void *data)
 */
 static int __init genhd_device_init(void)
 {	
-	//初始化设备映射对象
+	/* 初始化设备映射对象 */
 	bdev_map = kobj_map_init(base_probe, &block_subsys_lock);
-	blk_dev_init();//初始化块设备模块
+	blk_dev_init();/* 初始化块设备模块 */
 	subsystem_register(&block_subsys);
 	return 0;
 }
@@ -635,24 +642,24 @@ struct seq_operations diskstats_op = {
 };
 
 /**ltl
-功能:创建通用磁盘描述符
-参数:minors:分区个数
-返回值:通用磁盘描述符
-*/
+ * 功能:创建通用磁盘描述符
+ * 参数:minors:分区个数
+ * 返回值:通用磁盘描述符
+ */
 struct gendisk *alloc_disk(int minors)
 {
 	return alloc_disk_node(minors, -1);
 }
 /**ltl
-功能:创建通用磁盘描述符
-参数:minors:分区个数
-	node_id:内存字点
-返回值:通用磁盘描述符
-*/
+ * 功能: 创建通用磁盘描述符
+ * 参数: minors->分区个数,至少为1(minors=1(主分区数) + 子分区数)
+ *	node_id->内存字点
+ * 返回值: 通用磁盘描述符
+ */
 struct gendisk *alloc_disk_node(int minors, int node_id)
 {
 	struct gendisk *disk;
-	/*分配磁盘描述符*/
+	/* 分配通用磁盘对象 */
 	disk = kmalloc_node(sizeof(struct gendisk), GFP_KERNEL, node_id);
 	if (disk) {
 		/*对磁盘描述符置空*/
@@ -671,9 +678,9 @@ struct gendisk *alloc_disk_node(int minors, int node_id)
 			}
 			memset(disk->part, 0, size);
 		}
-		/*设备分区总数*/
+		/* 设备分区总数 */
 		disk->minors = minors;
-		/*初始化与sys相关变量*/
+		/* 初始化与sys相关变量 */
 		kobj_set_kset_s(disk,block_subsys);
 		kobject_init(&disk->kobj);
 		

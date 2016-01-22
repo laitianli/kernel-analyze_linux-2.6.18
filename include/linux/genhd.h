@@ -74,19 +74,22 @@ struct partition {
 	__le32 nr_sects;		/* nr of sectors in partition */
 } __attribute__((packed));
 
+/* 分区表数据结构 */
 struct hd_struct {
-	sector_t start_sect;
-	sector_t nr_sects;
+	sector_t start_sect; /* 起始扇区编号 */
+	sector_t nr_sects;	 /* 扇区总线 */
 	struct kobject kobj;
 	struct kobject *holder_dir;
 	unsigned ios[2], sectors[2];	/* READs and WRITEs */
-	int policy, partno;
+	int policy, partno;		/* policy: 0-> read only; 1-> read and write
+							   partno: 分区编号
+							*/
 };
 
-#define GENHD_FL_REMOVABLE			1	//分区可移除
-#define GENHD_FL_DRIVERFS			2	//
-#define GENHD_FL_CD				8		//分区是一个CDROM分区
-#define GENHD_FL_UP				16		//分区添加
+#define GENHD_FL_REMOVABLE			1	/* 分区可移除 */
+#define GENHD_FL_DRIVERFS			2	
+#define GENHD_FL_CD				8		/* 分区是一个CDROM分区 */
+#define GENHD_FL_UP				16		/* 分区添加 */
 #define GENHD_FL_SUPPRESS_PARTITION_INFO	32
 
 struct disk_stats {
@@ -97,18 +100,27 @@ struct disk_stats {
 	unsigned long io_ticks;
 	unsigned long time_in_queue;
 };
-	
+/* 通用磁盘数据结构 */	
 struct gendisk {
+	/* 主设备号 */
 	int major;			/* major number of driver */
+	/* 第一个分区编号 */
 	int first_minor;
+	/* 分区数(minors=1(主分区) + 子分区数 ) */
 	int minors;                     /* maximum number of minors, =1 for
                                          * disks that can't be partitioned. */
+	/* 通用磁盘名字，显示在/dev目录下 */										 	
 	char disk_name[32];		/* name of major driver */
+	/* 子分区对象 */										 
 	struct hd_struct **part;	/* [indexed by minor] */
 	int part_uevent_suppress;
+	/* 块设备操作对象 */
 	struct block_device_operations *fops;
+	/* 请求队列对象 */
 	struct request_queue *queue;
+	/* 私有数据结构 */
 	void *private_data;
+	/* 磁盘容量(以512B为单位) */
 	sector_t capacity;
 
 	int flags;
@@ -118,7 +130,8 @@ struct gendisk {
 	struct kobject *slave_dir;
 
 	struct timer_rand_state *random;
-	int policy;
+	/* 0->表示此块设备为只读；1->为可读可写 */
+	int policy;	
 
 	atomic_t sync_io;		/* RAID */
 	unsigned long stamp;
@@ -413,13 +426,13 @@ extern void blk_register_region(dev_t dev, unsigned long range,
 extern void blk_unregister_region(dev_t dev, unsigned long range);
 
 /**ltl
-功能：通过通用磁盘描述符获取块设备描述符
-参数：disk:通用磁盘描述符
-	index:分区号（0~n）
-*/
+ * 功能：通过通用磁盘描述符获取块设备描述符
+ * 参数：disk:通用磁盘描述符
+ *	index:分区号（0~n）
+ */
 static inline struct block_device *bdget_disk(struct gendisk *disk, int index)
 {
-	/*利用设备号获取设备描述符*/
+	/* 利用设备号获取设备描述符 */
 	return bdget(MKDEV(disk->major, disk->first_minor) + index);
 }
 

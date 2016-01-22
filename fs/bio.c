@@ -1029,12 +1029,12 @@ void bio_check_pages_dirty(struct bio *bio)
  *   a bio unless they own it and thus know that it has an end_io function.
  **/
 /**ltl
-功能:当bio处理完成，调用此接口通知上层驱动当前请求已经处理完毕。
-参数:bio->bio对象
-	bytes_done->处理完成的字节数
-	error->0:表示成功处理了bio
-	       非0:表示处理bio失败
-*/
+ * 功能:当bio处理完成，调用此接口通知上层驱动当前请求已经处理完毕。
+ * 参数:bio->bio对象
+ *	bytes_done->处理完成的字节数
+ *	error->0:表示成功处理了bio
+ *	       非0:表示处理bio失败
+ */
 void bio_endio(struct bio *bio, unsigned int bytes_done, int error)
 {
 	/*如果出现错误，清除BIO_UPTODATE标志，注:BIO_UPTODATE表示当前的bio已经全部处理完成的标志*/
@@ -1047,10 +1047,10 @@ void bio_endio(struct bio *bio, unsigned int bytes_done, int error)
 		bytes_done = bio->bi_size;
 	}
 
-	bio->bi_size -= bytes_done;//设置剩余的字节数
-	bio->bi_sector += (bytes_done >> 9);//偏移起始扇区位置
+	bio->bi_size -= bytes_done;/* 设置剩余的字节数 */
+	bio->bi_sector += (bytes_done >> 9);/* 偏移起始扇区位置 */
 
-	if (bio->bi_end_io)//调用原始bio的完成处理函数
+	if (bio->bi_end_io)/* 调用原始bio的完成处理函数 */
 		bio->bi_end_io(bio, bytes_done, error);
 }
 

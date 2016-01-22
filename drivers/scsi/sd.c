@@ -836,7 +836,12 @@ static int sd_issue_flush(struct device *dev, sector_t *error_sector)
 	scsi_disk_put(sdkp);
 	return ret;
 }
-
+/**ltl
+ * 功能: 构造冲刷命令
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void sd_prepare_flush(request_queue_t *q, struct request *rq)
 {
 	memset(rq->cmd, 0, sizeof(rq->cmd));

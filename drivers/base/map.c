@@ -28,7 +28,18 @@ struct kobj_map {
 	} *probes[255];
 	struct mutex *lock;
 };
-
+/**ltl
+ * 功能: 块设备对象插入到对象图中
+ * 参数: domain	-> 对象图
+ *		dev		-> 块设备对象
+ *		range	->
+ *		module	->
+ *		probe	-> 探针接口
+ *		lock		->
+ *		data		-> 私有数据，对于实际的设备，此域为通用磁盘对象
+ * 返回值:
+ * 说明:
+ */
 int kobj_map(struct kobj_map *domain, dev_t dev, unsigned long range,
 	     struct module *module, kobj_probe_t *probe,
 	     int (*lock)(dev_t, void *), void *data)
@@ -48,11 +59,11 @@ int kobj_map(struct kobj_map *domain, dev_t dev, unsigned long range,
 
 	for (i = 0; i < n; i++, p++) {
 		p->owner = module;
-		p->get = probe;
+		p->get = probe; /* 探针接口 */
 		p->lock = lock;
-		p->dev = dev;
+		p->dev = dev;	/* 设备号 */
 		p->range = range;
-		p->data = data;
+		p->data = data;	/* 私有数据 */
 	}
 	mutex_lock(domain->lock);
 	for (i = 0, p -= n; i < n; i++, p++, index++) {

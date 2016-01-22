@@ -746,7 +746,7 @@ void scsi_finish_command(struct scsi_cmnd *cmd)
 	SCSI_LOG_MLCOMPLETE(4, sdev_printk(KERN_INFO, sdev,
 				"Notifying upper driver of completion "
 				"(result %x)\n", cmd->result));
-	//调用命令处理完成函数:scsi_blk_pc_done或者sd_rw_intr
+	/* 调用命令处理完成函数:scsi_blk_pc_done或者sd_rw_intr */
 	cmd->done(cmd);
 }
 EXPORT_SYMBOL(scsi_finish_command);

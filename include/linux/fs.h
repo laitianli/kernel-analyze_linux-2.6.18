@@ -1005,7 +1005,7 @@ int generic_osync_inode(struct inode *, struct address_space *, int);
  * to have different dirent layouts depending on the binary type.
  */
 typedef int (*filldir_t)(void *, const char *, int, loff_t, ino_t, unsigned);
-
+/* 块设备操作接口数据结构 */
 struct block_device_operations {
 	int (*open) (struct inode *, struct file *);
 	int (*release) (struct inode *, struct file *);

@@ -67,6 +67,7 @@
 #define ACPI_PROCESSOR_FILE_LIMIT	"limit"
 #define ACPI_PROCESSOR_NOTIFY_PERFORMANCE 0x80
 #define ACPI_PROCESSOR_NOTIFY_POWER	0x81
+#define ACPI_PROCESSOR_NOTIFY_THROTTLING	0x82
 
 #define ACPI_PROCESSOR_LIMIT_USER	0
 #define ACPI_PROCESSOR_LIMIT_THERMAL	1
@@ -87,15 +88,15 @@ static int acpi_processor_info_open_fs(struct inode *inode, struct file *file);
 static void acpi_processor_notify(acpi_handle handle, u32 event, void *data);
 static acpi_status acpi_processor_hotadd_init(acpi_handle handle, int *p_cpu);
 static int acpi_processor_handle_eject(struct acpi_processor *pr);
-/* 处理器驱动 */
+
 static struct acpi_driver acpi_processor_driver = {
 	.name = ACPI_PROCESSOR_DRIVER_NAME,
 	.class = ACPI_PROCESSOR_CLASS,
 	.ids = ACPI_PROCESSOR_HID,
 	.ops = {
-		.add = acpi_processor_add,			/* 添加接口 */
-		.remove = acpi_processor_remove,	/* 移除接口 */
-		.start = acpi_processor_start,		/* 开启接口 */
+		.add = acpi_processor_add,
+		.remove = acpi_processor_remove,
+		.start = acpi_processor_start,
 		},
 };
 
@@ -409,13 +410,8 @@ static int convert_acpiid_to_cpu(u8 acpi_id)
 /* --------------------------------------------------------------------------
                                  Driver Interface
    -------------------------------------------------------------------------- */
-/**ltl
- * 功能: 获取处理器信息
- * 参数:
- * 返回值:
- * 说明:
- */
-static int acpi_processor_get_info(struct acpi_processor *pr)
+
+static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device *device)
 {
 	acpi_status status = 0;
 	union acpi_object object = { 0 };
@@ -437,7 +433,7 @@ static int acpi_processor_get_info(struct acpi_processor *pr)
 	 * is required for proper C3 usage (to maintain cache coherency).
 	 */
 	if (acpi_fadt.V1_pm2_cnt_blk && acpi_fadt.pm2_cnt_len) {
-		pr->flags.bm_control = 1;	/*  */
+		pr->flags.bm_control = 1;
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 				  "Bus mastering arbitration control present\n"));
 	} else
@@ -479,13 +475,22 @@ static int acpi_processor_get_info(struct acpi_processor *pr)
 	 *  they are physically not present.
 	 */
 	if (cpu_index == -1) {
-		if (ACPI_FAILURE(acpi_processor_hotadd_init(pr->handle, &pr->id))) {
-			printk(KERN_ERR PREFIX
-				    "Getting cpuindex for acpiid 0x%x\n",
-				    pr->acpi_id);
+		if (ACPI_FAILURE
+		    (acpi_processor_hotadd_init(pr->handle, &pr->id))) {
 			return -ENODEV;
 		}
 	}
+
+	/*
+	 * On some boxes several processors use the same processor bus id.
+	* But they are located in different scope. For example:
+	* \_SB.SCK0.CPU0
+	* \_SB.SCK1.CPU0
+	* Rename the processor device bus id. And the new bus id will be
+	* generated as the following format:
+	* CPU+CPU ID.
+	*/
+       sprintf(acpi_device_bid(device), "CPU%X", pr->id);
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Processor [%d:%d]\n", pr->id,
 			  pr->acpi_id));
@@ -532,7 +537,7 @@ static int acpi_processor_start(struct acpi_device *device)
 
 	pr = acpi_driver_data(device);
 
-	result = acpi_processor_get_info(pr);
+	result = acpi_processor_get_info(pr, device);
 	if (result) {
 		/* Processor is physically not present */
 		return 0;
@@ -602,6 +607,9 @@ static void acpi_processor_notify(acpi_handle handle, u32 event, void *data)
 		acpi_processor_cst_has_changed(pr);
 		acpi_bus_generate_event(device, event, 0);
 		break;
+	case ACPI_PROCESSOR_NOTIFY_THROTTLING:
+		acpi_processor_tstate_has_changed(pr);
+		acpi_bus_generate_event(device, event, 0);
 	default:
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 				  "Unsupported event [0x%x]\n", event));
@@ -681,11 +689,19 @@ static int is_processor_present(acpi_handle handle)
 
 
 	status = acpi_evaluate_integer(handle, "_STA", NULL, &sta);
-	if (ACPI_FAILURE(status) || !(sta & ACPI_STA_PRESENT)) {
-		ACPI_EXCEPTION((AE_INFO, status, "Processor Device is not present"));
-		return 0;
-	}
-	return 1;
+
+	if (ACPI_SUCCESS(status) && (sta & ACPI_STA_DEVICE_PRESENT)) 
+		return 1;
+	/*
+	 * _STA is mandatory for a processor that supports hot plug
+	 */
+	if (status == AE_NOT_FOUND)
+		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
+				"Processor does not support hot plug\n"));
+	else
+		ACPI_EXCEPTION((AE_INFO, status,
+				"Processor Device is not present"));
+	return 0;
 }
 
 static
@@ -864,12 +880,7 @@ static int acpi_processor_handle_eject(struct acpi_processor *pr)
 	return (-EINVAL);
 }
 #endif
-/**ltl
- * 功能: 热插拨通知事件的处理句柄
- * 参数:
- * 返回值:
- * 说明:
- */
+
 static
 void acpi_processor_install_hotplug_notify(void)
 {
@@ -899,12 +910,7 @@ void acpi_processor_uninstall_hotplug_notify(void)
  * This is needed for the powernow-k8 driver, that works even without
  * ACPI, but needs symbols from this driver
  */
-/**ltl
- * 功能: 处理驱动的初始化
- * 参数:
- * 返回值:
- * 说明:
- */
+
 static int __init acpi_processor_init(void)
 {
 	int result = 0;
@@ -917,18 +923,17 @@ static int __init acpi_processor_init(void)
 	if (!acpi_processor_dir)
 		return 0;
 	acpi_processor_dir->owner = THIS_MODULE;
-	/* 注册处理器驱动 */
+
 	result = acpi_bus_register_driver(&acpi_processor_driver);
 	if (result < 0) {
 		remove_proc_entry(ACPI_PROCESSOR_CLASS, acpi_root_dir);
 		return 0;
 	}
-	/* 为热插拨安装消息处理句柄 */
+
 	acpi_processor_install_hotplug_notify();
-	/* CPU温度控制模块的初始化 */
+
 	acpi_thermal_cpufreq_init();
-	
-	/* 处理器状态的初始化 */
+
 	acpi_processor_ppc_init();
 
 	return 0;

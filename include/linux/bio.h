@@ -56,9 +56,9 @@
  * was unsigned short, but we might as well be ready for > 64kB I/O pages
  */
 struct bio_vec {
-	struct page	*bv_page;
-	unsigned int	bv_len;
-	unsigned int	bv_offset;
+	struct page	*bv_page;	/* page地址 */
+	unsigned int	bv_len;	/* 数据长度 */
+	unsigned int	bv_offset;	/* 数据在page的偏移 */
 };
 
 struct bio_set;
@@ -71,15 +71,18 @@ typedef void (bio_destructor_t) (struct bio *);
  * stacking drivers)
  */
 struct bio {
-	sector_t		bi_sector;
+	/* bio起始扇区编号 */
+	sector_t		bi_sector;	
 	struct bio		*bi_next;	/* request queue link */
+	/* 此bio所属的块设备对象 */
 	struct block_device	*bi_bdev;
 	unsigned long		bi_flags;	/* status, command, etc */
 	unsigned long		bi_rw;		/* bottom bits READ/WRITE,
 						 * top bits priority
 						 */
-
+	/* 成员bi_io_vec的数组长度 */
 	unsigned short		bi_vcnt;	/* how many bio_vec's */
+  	/* 指向bi_io_vec数组下标，表示当前读写的位置 */						 
 	unsigned short		bi_idx;		/* current index into bvl_vec */
 
 	/* Number of segments in this BIO after
@@ -91,7 +94,7 @@ struct bio {
 	 * hardware coalescing is performed.
 	 */
 	unsigned short		bi_hw_segments;
-
+	/* bio数据总长度 */
 	unsigned int		bi_size;	/* residual I/O count */
 
 	/*
@@ -103,12 +106,12 @@ struct bio {
 	unsigned int		bi_hw_back_size;
 
 	unsigned int		bi_max_vecs;	/* max bvl_vecs we can hold */
-
+	/* bio_vec数组的起始地址，存放数据的地方 */
 	struct bio_vec		*bi_io_vec;	/* the actual vec list */
-
+	/* bio完成处理函数接口 */
 	bio_end_io_t		*bi_end_io;
 	atomic_t		bi_cnt;		/* pin count */
-
+	/* bio私有数据(当此bio为反弹缓冲区时，用此指针保存原bio) */
 	void			*bi_private;
 
 	bio_destructor_t	*bi_destructor;	/* destructor */

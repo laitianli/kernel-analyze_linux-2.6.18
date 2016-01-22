@@ -1345,6 +1345,48 @@ static inline int wake_idle(int cpu, struct task_struct *p)
 }
 #endif
 
+/*
+ * Change a given task's CPU affinity. Migrate the thread to a
+ * proper CPU and schedule it away if the CPU it's executing on
+ * is removed from the allowed bitmask.
+ *
+ * NOTE: the caller must have a valid reference to the task, the
+ * task must not exit() & deallocate itself prematurely. The
+ * call is not atomic; no spinlocks may be held.
+ */
+int set_cpus_allowed_ptr(struct task_struct *p, const cpumask_t *new_mask)
+{
+	struct migration_req req;
+	unsigned long flags;
+	struct rq *rq;
+	int ret = 0;
+
+	rq = task_rq_lock(p, &flags);
+	if (!cpus_intersects(*new_mask, cpu_online_map)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	p->cpus_allowed = *new_mask;
+
+	/* Can the task run on the task's current CPU? If so, we're done */
+	if (cpu_isset(task_cpu(p), *new_mask))
+		goto out;
+
+	if (migrate_task(p, any_online_cpu(*new_mask), &req)) {
+		/* Need help from migration thread: drop lock and wait. */
+		task_rq_unlock(rq, &flags);
+		wake_up_process(rq->migration_thread);
+		wait_for_completion(&req.done);
+		tlb_migrate_finish(p->mm);
+		return 0;
+	}
+out:
+	task_rq_unlock(rq, &flags);
+
+	return ret;
+}
+
 /***
  * try_to_wake_up - wake up a thread
  * @p: the to-be-woken-up thread

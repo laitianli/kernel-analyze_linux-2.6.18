@@ -298,44 +298,44 @@ static void copy_to_high_bio_irq(struct bio *to, struct bio *from)
 	}
 }
 /**ltl
-功能:释放反弹缓冲区的内存，并调用原始的bio的结束处理函数
-参数:bio->反弹缓冲区
-	pool->内存池
-	err->bio处理的状态
-*/
+ * 功能:释放反弹缓冲区的内存，并调用原始的bio的结束处理函数
+ * 参数:bio->反弹缓冲区
+ *	pool->内存池
+ *	err->bio处理的状态
+ */
 static void bounce_end_io(struct bio *bio, mempool_t *pool, int err)
 {
 	struct bio *bio_orig = bio->bi_private;
 	struct bio_vec *bvec, *org_vec;
 	int i;
-	/*表示当前bio不支持，或者不能处理，此时要把原始的bio也置不支持标志*/
+	/* 表示当前bio不支持，或者不能处理，此时要把原始的bio也置不支持标志 */
 	if (test_bit(BIO_EOPNOTSUPP, &bio->bi_flags))
 		set_bit(BIO_EOPNOTSUPP, &bio_orig->bi_flags);
 
 	/*
 	 * free up bounce indirect pages used
 	 */
-	/*释放反弹缓冲区*/
+	/* 释放反弹缓冲区 */
 	__bio_for_each_segment(bvec, bio, i, 0) {
 		org_vec = bio_orig->bi_io_vec + i;
 		if (bvec->bv_page == org_vec->bv_page)
 			continue;
 
 		dec_zone_page_state(bvec->bv_page, NR_BOUNCE);
-		//释放内存
+		/* 释放内存 */
 		mempool_free(bvec->bv_page, pool);
 	}
-	/*调用原始的bio的完成处理函数*/
+	/* 调用原始的bio的完成处理函数 */
 	bio_endio(bio_orig, bio_orig->bi_size, err);
 	bio_put(bio);
 }
 
 static int bounce_end_io_write(struct bio *bio, unsigned int bytes_done, int err)
 {	
-	/*当前的bio还没有完全处理完。注:bi_size表示剩余的传输字节数*/
+	/* 当前的bio还没有完全处理完。注:bi_size表示剩余的传输字节数 */
 	if (bio->bi_size)
 		return 1;
-	/*释放反弹缓冲区，并调用原始的bio的结束处理函数*/
+	/* 释放反弹缓冲区，并调用原始的bio的结束处理函数 */
 	bounce_end_io(bio, page_pool, err);
 	return 0;
 }
@@ -379,46 +379,46 @@ static int bounce_end_io_read_isa(struct bio *bio, unsigned int bytes_done, int 
 	return 0;
 }
 /**ltl
-功能:分配bio的反弹缓冲区
-参数:q->请求队列
-	bio_orig->[in]:原缓冲区(可能是在高端内存或者是部分在高端内存)
-		    [out]:分配之后的缓冲区
-	pool->请求分配的内存池对象
-*/
+ * 功能:分配bio的反弹缓冲区
+ * 参数:q->请求队列
+ *	bio_orig->[in]:原缓冲区(可能是在高端内存或者是部分在高端内存)
+ *		    [out]:分配之后的缓冲区
+ *	pool->请求分配的内存池对象
+ */
 static void __blk_queue_bounce(request_queue_t *q, struct bio **bio_orig,
 			       mempool_t *pool)
 {
 	struct page *page;
 	struct bio *bio = NULL;
-	int i, rw = bio_data_dir(*bio_orig);//当前bio请求的流向:READ/WRITE
+	int i, rw = bio_data_dir(*bio_orig);/* 当前bio请求的流向:READ/WRITE */
 	struct bio_vec *to, *from;
-	/*遍历bio,把bio_orig->bio_vec的内容存放到新分配的bio中*/
+	/* 遍历bio,把bio_orig->bio_vec的内容存放到新分配的bio中 */
 	bio_for_each_segment(from, *bio_orig, i) {
 		page = from->bv_page;
 
 		/*
 		 * is destination page below bounce pfn?
 		 */
-		 /*当有的页地址在低端内存,则此内存区不用映射。注:bounce_pfn表示低端内存的最大页号*/
+		 /* 当有的页地址在低端内存,则此内存区不用映射。注:bounce_pfn表示低端内存的最大页号 */
 		if (page_to_pfn(page) < q->bounce_pfn)
 			continue;
 
 		/*
 		 * irk, bounce it
 		 */
-		 /*根据原有的bio，在低端内存申请空间*/
+		 /* 根据原有的bio，在低端内存申请空间 */
 		if (!bio)
 			bio = bio_alloc(GFP_NOIO, (*bio_orig)->bi_vcnt);
 
-		//在低端内存分配新的bv_page空间
+		/* 在低端内存分配新的bv_page空间 */
 		to = bio->bi_io_vec + i;
 
 		to->bv_page = mempool_alloc(pool, q->bounce_gfp);
 		to->bv_len = from->bv_len;
 		to->bv_offset = from->bv_offset;
-		inc_zone_page_state(to->bv_page, NR_BOUNCE);//这语句什么作用????
+		inc_zone_page_state(to->bv_page, NR_BOUNCE);/* 这语句什么作用???? */
 
-		/*如果是写数据，则要把数据拷贝到新的缓冲区中*/
+		/* 如果是写数据，则要把数据拷贝到新的缓冲区中 */
 		if (rw == WRITE) {
 			char *vto, *vfrom;
 
@@ -434,7 +434,7 @@ static void __blk_queue_bounce(request_queue_t *q, struct bio **bio_orig,
 	 * no pages bounced
 	 */
 	
-	if (!bio)//表示原有的bio的内存空间就在低端内存，不用映射
+	if (!bio)/* 表示原有的bio的内存空间就在低端内存，不用映射 */
 		return;
 
 	/*
@@ -442,9 +442,10 @@ static void __blk_queue_bounce(request_queue_t *q, struct bio **bio_orig,
 	 * pages
 	 */
 	/*
-	以下是对各个成员数据进行赋值
-	*/
-	__bio_for_each_segment(from, *bio_orig, i, 0) {//目的:防止在上面调用mempool_alloc函数分配失败，主要是代码健壮性处理。
+	 * 以下是对各个成员数据进行赋值
+	 * 目的:防止在上面调用mempool_alloc函数分配失败，主要是代码健壮性处理。
+	 */
+	__bio_for_each_segment(from, *bio_orig, i, 0) {
 		to = bio_iovec_idx(bio, i);
 		if (!to->bv_page) {
 			to->bv_page = from->bv_page;
@@ -454,7 +455,7 @@ static void __blk_queue_bounce(request_queue_t *q, struct bio **bio_orig,
 	}
 
 	bio->bi_bdev = (*bio_orig)->bi_bdev;
-	bio->bi_flags |= (1 << BIO_BOUNCED);//设置反弹缓冲区标志
+	bio->bi_flags |= (1 << BIO_BOUNCED);/* 设置反弹缓冲区标志 */
 	bio->bi_sector = (*bio_orig)->bi_sector;
 	bio->bi_rw = (*bio_orig)->bi_rw;
 
@@ -462,27 +463,27 @@ static void __blk_queue_bounce(request_queue_t *q, struct bio **bio_orig,
 	bio->bi_idx = (*bio_orig)->bi_idx;
 	bio->bi_size = (*bio_orig)->bi_size;
 
-	if (pool == page_pool) {//在低端内存分配的缓冲区
-		bio->bi_end_io = bounce_end_io_write;//设置bio写请求处理完成后的处理函数
+	if (pool == page_pool) {/* 在低端内存分配的缓冲区 */
+		bio->bi_end_io = bounce_end_io_write;/* 设置bio写请求处理完成后的处理函数 */
 		if (rw == READ)
-			bio->bi_end_io = bounce_end_io_read;//设置bio读请求处理完成后的处理函数
+			bio->bi_end_io = bounce_end_io_read;/* 设置bio读请求处理完成后的处理函数 */
 	} else {
 		bio->bi_end_io = bounce_end_io_write_isa;
 		if (rw == READ)
 			bio->bi_end_io = bounce_end_io_read_isa;
 	}
-
-	bio->bi_private = *bio_orig;//记录原始的bio，以便在反弹缓冲区处理完成后，能找到原始的bio
+	/* 记录原始的bio，以便在反弹缓冲区处理完成后，能找到原始的bio */
+	bio->bi_private = *bio_orig;
 	*bio_orig = bio;
 }
 /**ltl
-功能:创建一个反弹缓冲区。通常是在驱动尝试在外围设备不可达到的地址，例如高端内存上执行DMA时。
-	创建反弹缓冲区后，数据要在原缓冲区和反弹缓冲区之间进行与读/写方向对应的复制。
-	缺点:使用反弹缓冲区会降低性能。但是无法避免。
-参数:q->请求队列
-	bio_orig->[in]:请求的bio
-		    [out]:如果bio中的数据存在或者部分存在高端内存，则表示把高端内存映射到低端内存之后的bio
-*/
+ * 功能:创建一个反弹缓冲区。通常是在驱动尝试在外围设备不可达到的地址，例如高端内存上执行DMA时。
+ *	创建反弹缓冲区后，数据要在原缓冲区和反弹缓冲区之间进行与读/写方向对应的复制。
+ *	缺点:使用反弹缓冲区会降低性能。但是无法避免。
+ * 参数:q->请求队列
+ *	bio_orig->[in]:请求的bio
+ *		    [out]:如果bio中的数据存在或者部分存在高端内存，则表示把高端内存映射到低端内存之后的bio
+ */
 void blk_queue_bounce(request_queue_t *q, struct bio **bio_orig)
 {
 	mempool_t *pool;
@@ -493,13 +494,13 @@ void blk_queue_bounce(request_queue_t *q, struct bio **bio_orig)
 	 * don't waste time iterating over bio segments
 	 */
 	/*
-	   在常规内存或者高端内存区分匹配
-	*/
+	 * 在常规内存或者高端内存区分匹配
+	 */
 	if (!(q->bounce_gfp & GFP_DMA)) {
 		if (q->bounce_pfn >= blk_max_pfn)
 			return;
 		pool = page_pool;
-	} else {//在DMA区段【0-16M】分配的内存,一般运用于ISA设备进行DMA操作
+	} else {/* 在DMA区段【0-16M】分配的内存,一般运用于ISA设备进行DMA操作 */
 		BUG_ON(!isa_page_pool);
 		pool = isa_page_pool;
 	}
@@ -509,7 +510,7 @@ void blk_queue_bounce(request_queue_t *q, struct bio **bio_orig)
 	/*
 	 * slow path
 	 */
-	/*在相应的内存池分配新的缓冲区*/
+	/* 在相应的内存池分配新的缓冲区 */
 	__blk_queue_bounce(q, bio_orig, pool);
 }
 

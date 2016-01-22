@@ -312,7 +312,12 @@ static struct file_system_type bd_type = {
 
 static struct vfsmount *bd_mnt __read_mostly;
 struct super_block *blockdev_superblock;
-
+/**ltl
+ * 功能: 初始化bdev文件系统
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void __init bdev_cache_init(void)
 {
 	int err;
@@ -320,6 +325,7 @@ void __init bdev_cache_init(void)
 			0, (SLAB_HWCACHE_ALIGN|SLAB_RECLAIM_ACCOUNT|
 				SLAB_MEM_SPREAD|SLAB_PANIC),
 			init_once, NULL);
+	/* 注册bdev文件系统 */
 	err = register_filesystem(&bd_type);
 	if (err)
 		panic("Cannot register bdev pseudo-fs");
@@ -354,17 +360,19 @@ static int bdev_set(struct inode *inode, void *data)
 static LIST_HEAD(all_bdevs);
 
 /**ltl
-功能：通过设备号获取设备描述符
-参数：dev:设备号
-返回值：dev设备号所代表的设备描述符
-*/
+ * 功能：通过设备号获取设备描述符
+ * 参数：dev->设备号
+ * 返回值：dev设备号所代表的设备描述符
+ */
 struct block_device *bdget(dev_t dev)
 {
 	struct block_device *bdev;
 	struct inode *inode;
-	/*从已经挂载的文件系统中获取一个inode节点。在这里文件系统类型是bdev。
-	bd_mnt是一个全局变量，类型struct vfsmount，在bdev_cache_init
-	注册bdev文件系统后，调用kern_mount获取的变量*/
+	/*
+	 * 从已经挂载的文件系统bdev中获取一个inode节点。在这里文件系统类型是bdev。
+	 * bd_mnt是一个全局变量，类型struct vfsmount，在bdev_cache_init
+	 * 注册bdev文件系统后，调用kern_mount获取的变量
+	 */
 	inode = iget5_locked(bd_mnt->mnt_sb, hash(dev),
 			bdev_test, bdev_set, &dev);
 
@@ -384,10 +392,10 @@ struct block_device *bdget(dev_t dev)
 		inode->i_mode = S_IFBLK;/*inode是一个块设备类型*/
 		inode->i_rdev = dev;
 		inode->i_bdev = bdev;/*inode所以的设备描述符*/
-		inode->i_data.a_ops = &def_blk_aops;
+		inode->i_data.a_ops = &def_blk_aops; /* bdev文件系统地址空间操作对象 */
 		mapping_set_gfp_mask(&inode->i_data, GFP_USER);
-		inode->i_data.backing_dev_info = &default_backing_dev_info;
-		spin_lock(&bdev_lock);/*保护all_bdevs变量的锁*/
+		inode->i_data.backing_dev_info = &default_backing_dev_info; /* 默认后备设备信息 */
+		spin_lock(&bdev_lock); /*保护all_bdevs变量的锁*/
 		/*all_bdevs是一个全局变量，系统中的块设备描述符列表头把当前的设备描述符添加到全局列表中*/
 		list_add(&bdev->bd_list, &all_bdevs);
 		spin_unlock(&bdev_lock);
@@ -974,7 +982,7 @@ do_open(struct block_device *bdev, struct file *file, unsigned int subclass)
 	file->f_mapping = bdev->bd_inode->i_mapping;
 	lock_kernel();
 	
-	/*根据设备号从内核映射表中获取内核对象gendisk,part输入变量，表示当前块设备的分区号*/
+	/*根据设备号从内核映射表中获取内核对象gendisk,part输出变量，表示当前块设备的分区号*/
 	disk = get_gendisk(bdev->bd_dev, &part);
 	if (!disk) {
 		unlock_kernel();
@@ -990,7 +998,7 @@ do_open(struct block_device *bdev, struct file *file, unsigned int subclass)
 	if (!bdev->bd_openers) {
 		bdev->bd_disk = disk;/*关联块设备描述符对象与通用磁盘对象*/
 		/*把当前块设备描述符的bd_contains域设置当前块设备描述符，表示bdev
-		  表示的就是一个主分区，如果bdev是子分区的话，会在后面重新设备
+		  表示的就是一个主分区，如果bdev是子分区的话，会在后面重新设置
 		  bd_contains域。注：bd_contains存放当前分区的主分区的块设备描述符
 		*/
 		bdev->bd_contains = bdev;
@@ -1006,7 +1014,7 @@ do_open(struct block_device *bdev, struct file *file, unsigned int subclass)
 				bdi = blk_get_backing_dev_info(bdev);
 				if (bdi == NULL)
 					bdi = &default_backing_dev_info;
-				/*设备备份信息，这个信息的作用？*/
+				/*后备设备信息对象*/
 				bdev->bd_inode->i_data.backing_dev_info = bdi;
 			}
 			if (bdev->bd_invalidated)/*开始扫描主分区描述符bdev下的子分区*/
@@ -1018,7 +1026,7 @@ do_open(struct block_device *bdev, struct file *file, unsigned int subclass)
 			ret = -ENOMEM;
 			if (!whole)
 				goto out_first;
-			/*这个函数的实现还是调用do_open来实现递归调用。含义：扫描主分区的子分区，即走上面if(!part)分支。*/
+			/*这个函数的实现还是调用do_open来实现递归调用。含义：打开子分区所属的主分区，即走上面if(!part)分支。*/
 			ret = blkdev_get_whole(whole, file->f_mode, file->f_flags);
 			if (ret)/*扫描失败后退出*/
 				goto out_first;
@@ -1057,11 +1065,11 @@ do_open(struct block_device *bdev, struct file *file, unsigned int subclass)
 		} else {/*打开的是子分区*/
 			mutex_lock_nested(&bdev->bd_contains->bd_mutex,
 					  BD_MUTEX_PARTITION);
-			bdev->bd_contains->bd_part_count++;//主分区的打开引用计数器+1
+			bdev->bd_contains->bd_part_count++;/* 主分区的打开引用计数器+1 */
 			mutex_unlock(&bdev->bd_contains->bd_mutex);
 		}
 	}
-	bdev->bd_openers++;//打开计数加1
+	bdev->bd_openers++;/* 打开计数加1 */
 	mutex_unlock(&bdev->bd_mutex);
 	unlock_kernel();
 	return 0;
@@ -1083,13 +1091,13 @@ out:
 }
 
 /**ltl
-功能：扫描块设备描述符bdev下的分区
-参数：bdev:块设备描述符
-      mode:读写权限
-	  flags:1表示当前描述是否是子分区，否则是当前扫描是主分区。
-返回值：0：成功扫描到分区，并添加到系统中。
-		<0:失败
-*/
+ * 功能：扫描块设备描述符bdev下的分区
+ * 参数：bdev:块设备描述符
+ *    mode:读写权限
+ *	  flags:1表示当前描述是否是子分区，否则是当前扫描是主分区。
+ * 返回值：0：成功扫描到分区，并添加到系统中。
+ *		<0:失败
+ */
 int blkdev_get(struct block_device *bdev, mode_t mode, unsigned flags)
 {
 	/*
@@ -1098,14 +1106,14 @@ int blkdev_get(struct block_device *bdev, mode_t mode, unsigned flags)
 	 * For now, block device ->open() routine must _not_
 	 * examine anything in 'inode' argument except ->i_rdev.
 	 */
-	 /*由于打开块设备的接口blkdev_open也要调用do_open，所以构造了如下的变量并初始化*/
+	 /* 由于打开块设备的接口blkdev_open也要调用do_open，所以构造了如下的变量并初始化 */
 	struct file fake_file = {};
 	struct dentry fake_dentry = {};
 	fake_file.f_mode = mode;
 	fake_file.f_flags = flags;
 	fake_file.f_dentry = &fake_dentry;
 	fake_dentry.d_inode = bdev->bd_inode;
-	/*打开一个设备文件*/
+	/* 打开一个设备文件 */
 	return do_open(bdev, &fake_file, BD_MUTEX_NORMAL);
 }
 
@@ -1206,7 +1214,7 @@ static long block_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 {
 	return blkdev_ioctl(file->f_mapping->host, file, cmd, arg);
 }
-
+/* bdev文件系统的地址空间操作对象 */
 const struct address_space_operations def_blk_aops = {
 	.readpage	= blkdev_readpage,
 	.writepage	= blkdev_writepage,
@@ -1216,7 +1224,7 @@ const struct address_space_operations def_blk_aops = {
 	.writepages	= generic_writepages,
 	.direct_IO	= blkdev_direct_IO,
 };
-
+/* bdev文件系统的文件操作对象 */
 const struct file_operations def_blk_fops = {
 	.open		= blkdev_open,
 	.release	= blkdev_close,

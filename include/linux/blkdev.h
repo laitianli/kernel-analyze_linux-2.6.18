@@ -129,8 +129,9 @@ struct request_list {
 /*
  * try to put the fields that are referenced together in the same cacheline
  */
+/* 请求对象 */
 struct request {
-	struct list_head queuelist;
+	struct list_head queuelist;	/* 连接件，用于插入到request_queue:queue_head */
 	struct list_head donelist;
 
 	unsigned long flags;		/* see REQ_ bits below */
@@ -138,8 +139,9 @@ struct request {
 	/* Maintain bio traversal state for part by part I/O submission.
 	 * hard_* are block layer internals, no driver should touch them!
 	 */
-
+	/* 起始扇区 */
 	sector_t sector;		/* next sector to submit */
+	/* 扇区个数 */
 	unsigned long nr_sectors;	/* no. of sectors left to submit */
 	/* no. of sectors left to submit in the current segment */
 	unsigned int current_nr_sectors;
@@ -148,16 +150,18 @@ struct request {
 	unsigned long hard_nr_sectors;	/* no. of sectors left to complete */
 	/* no. of sectors left to complete in the current segment */
 	unsigned int hard_cur_sectors;
-
+	/* bio链表头 */
 	struct bio *bio;
+	/* bio链表尾 */
 	struct bio *biotail;
-
-	void *elevator_private;//与IO调度器相关的私有数据
+	/* 与IO调度器相关的私有数据*/
+	void *elevator_private;
 	void *completion_data;
 
 	int rq_status;	/* should split this into a few status bits */
 	int errors;
-	struct gendisk *rq_disk;
+	/* 通用磁盘对象 */
+	struct gendisk *rq_disk;	
 	unsigned long start_time;
 
 	/* Number of scatter-gather DMA addr+len pairs after
@@ -178,7 +182,7 @@ struct request {
 	int tag;
 
 	int ref_count;
-	request_queue_t *q;
+	request_queue_t *q;	/* 请求队列对象 */
 	struct request_list *rl;
 
 	struct completion *waiting;
@@ -195,14 +199,16 @@ struct request {
 	unsigned int sense_len;
 	void *data;
 	void *sense;
-
+	/* 请求超时时间 */
 	unsigned int timeout;
+	/* 当请求失败时，可以请求的次数 */
 	int retries;
 
 	/*
 	 * completion callback. end_io_data should be folded in with waiting
 	 */
-	rq_end_io_fn *end_io;//这个成员只对屏障IO有用
+	/* 这个成员只对屏障IO有用 */
+	rq_end_io_fn *end_io;
 	void *end_io_data;
 };
 
@@ -250,13 +256,13 @@ enum rq_flag_bits {
 #define REQ_SOFTBARRIER	(1 << __REQ_SOFTBARRIER)//请求相当于I/O调度程序的屏障
 #define REQ_HARDBARRIER	(1 << __REQ_HARDBARRIER)//请求相当于1/O调度程序和设备驱动程序的屏障—应当在旧请求与新请求之间处理该请求
 #define REQ_FUA		(1 << __REQ_FUA)
-#define REQ_CMD		(1 << __REQ_CMD)			//包含一个标准的读或写I/O数据传送的请求(这个命令请求来自用户进程)
+#define REQ_CMD		(1 << __REQ_CMD)			/* 包含一个标准的读或写I/O数据传送的请求(这个命令请求来自用户进程)*/
 #define REQ_NOMERGE	(1 << __REQ_NOMERGE)		//不允许扩展或与其它请求合并的请求
 #define REQ_STARTED	(1 << __REQ_STARTED)		//正处理的请求
 #define REQ_DONTPREP	(1 << __REQ_DONTPREP)	//不调用请求队列中的prep_rq_fn方法预先准备把命令发选项发给硬件设备
 #define REQ_QUEUED	(1 << __REQ_QUEUED)			//请求被标记——也就是说，与该请求相关的硬件设备可以同时管理很多未完成数据的传送
 #define REQ_ELVPRIV	(1 << __REQ_ELVPRIV)		//表示request对象有与调试算法相关的私有数据elevator_private
-#define REQ_PC		(1 << __REQ_PC)				//请求包含发送给硬件设备的直接命令(这个命令来自于SCSI中间层)
+#define REQ_PC		(1 << __REQ_PC)				/* 请求包含发送给硬件设备的直接命令(这个命令来自于SCSI中间层) */
 #define REQ_BLOCK_PC	(1 << __REQ_BLOCK_PC)	//与前一个标志功能相同，但发送的命令包含在bio结构中
 #define REQ_SENSE	(1 << __REQ_SENSE)			//请求包含一个“sense”请求命令（SCSI和ATAPI设备使用）
 #define REQ_FAILED	(1 << __REQ_FAILED)			//当请求中的sense或direct命令的操作与预期的不一致时设置该标志
@@ -317,32 +323,36 @@ struct blk_queue_tag {
 	int real_max_depth;		/* what the array can hold */
 	atomic_t refcnt;		/* map can be shared */
 };
-
+/* 请求队列数据结构 */
 struct request_queue
 {
 	/*
 	 * Together with queue_head for cacheline sharing
 	 */
-	struct list_head	queue_head;
+	struct list_head	queue_head;	/* 派发队列头 */
 	struct request		*last_merge;
-	elevator_t		*elevator;
+	elevator_t		*elevator;		/* 调度算法对象 */
 
 	/*
 	 * the queue request freelist, one for reads and one for writes
 	 */
 	struct request_list	rq;
-
+	/* 请求策略处理例程 */
 	request_fn_proc		*request_fn;
 	merge_request_fn	*back_merge_fn;
 	merge_request_fn	*front_merge_fn;
 	merge_requests_fn	*merge_requests_fn;
+	/* 请求构造接口 */
 	make_request_fn		*make_request_fn;
+	/* 在请求提交到SCSI层之前的预前处理接口 */
 	prep_rq_fn		*prep_rq_fn;
+	/* "泄流"工作队列接口 */
 	unplug_fn		*unplug_fn;
 	merge_bvec_fn		*merge_bvec_fn;
 	activity_fn		*activity_fn;
 	issue_flush_fn		*issue_flush_fn;
 	prepare_flush_fn	*prepare_flush_fn;
+	/* 软件中断处理接口 */
 	softirq_done_fn		*softirq_done_fn;
 
 	/*
@@ -354,11 +364,15 @@ struct request_queue
 	/*
 	 * Auto-unplugging state
 	 */
+	/* "泄流"定时器，当此定时器超时，则启用"泄流"工作队列 */ 
 	struct timer_list	unplug_timer;
+	/* "畜流"的最大阀值(当调度队列中的请求个数超过此值时，就要开始"泄流") */
 	int			unplug_thresh;	/* After this many requests */
+	/* "泄流"定时器超时时间 */
 	unsigned long		unplug_delay;	/* After this many jiffies */
+	/* "泄流"工作队列 */
 	struct work_struct	unplug_work;
-
+	/* 后备设备对象 */
 	struct backing_dev_info	backing_dev_info;
 
 	/*
@@ -372,8 +386,10 @@ struct request_queue
 	/*
 	 * queue needs bounce pages for pages above this limit
 	 */
+	/* 反弹缓冲区的最小值(为低端内存的最大帧号max_low_pfn) */
 	unsigned long		bounce_pfn;
-	gfp_t			bounce_gfp;
+	/* 分配反弹缓冲区的标志(如: GFP_NOIO | GFP_DMA) */
+	gfp_t			bounce_gfp; 
 
 	/*
 	 * various queue flags, see QUEUE_* below
@@ -404,7 +420,7 @@ struct request_queue
 	unsigned int		max_sectors;
 	unsigned int		max_hw_sectors;
 	unsigned short		max_phys_segments;
-	//最大的物理段数。由底层驱动(scsi)设定的,底层驱动根据允许scatter-gather list元素的最大个数设置此值(scsi_alloc_queue->blk_queue_max_hw_segments)
+	/* 最大的物理段数。由底层驱动(scsi)设定的,底层驱动根据允许scatter-gather list元素的最大个数设置此值(scsi_alloc_queue->blk_queue_max_hw_segments) */
 	unsigned short		max_hw_segments;
 	unsigned short		hardsect_size;
 	unsigned int		max_segment_size;
@@ -431,6 +447,7 @@ struct request_queue
 	 */
 	unsigned int		ordered, next_ordered, ordseq;
 	int			orderr, ordcolor;
+	/* 前刷、屏障IO、后刷 */
 	struct request		pre_flush_rq, bar_rq, post_flush_rq;
 	struct request		*orig_bar_rq;
 	unsigned int		bi_size;
@@ -463,18 +480,18 @@ enum {
 	 * TAG_FLUSH	: ordering by tag w/ pre and post flushes
 	 * TAG_FUA	: ordering by tag w/ pre flush and FUA write
 	 */
-	QUEUE_ORDERED_NONE	= 0x00,//不支持屏障IO
-	QUEUE_ORDERED_DRAIN	= 0x01,//先抽干屏障IO之前的所有IO，再执行屏障IO就足够了。
+	QUEUE_ORDERED_NONE	= 0x00,/* 不支持屏障IO */
+	QUEUE_ORDERED_DRAIN	= 0x01,/* 先抽干屏障IO之前的所有IO，再执行屏障IO就足够了。*/
 	QUEUE_ORDERED_TAG	= 0x02,
 
-	QUEUE_ORDERED_PREFLUSH	= 0x10,//屏障IO前冲刷
-	QUEUE_ORDERED_POSTFLUSH	= 0x20,//屏障IO之后冲刷
-	QUEUE_ORDERED_FUA	= 0x40,//强制写到介质上
+	QUEUE_ORDERED_PREFLUSH	= 0x10,/* 屏障IO前冲刷 */
+	QUEUE_ORDERED_POSTFLUSH	= 0x20,/* 屏障IO之后冲刷 */
+	QUEUE_ORDERED_FUA	= 0x40,/* 强制写到介质上 */
 
-	//先执行屏障IO之前的冲刷，再执行屏障IO，再执行屏障IO之后的冲刷
+	/* 先执行屏障IO之前的冲刷，再执行屏障IO，再执行屏障IO之后的冲刷 */
 	QUEUE_ORDERED_DRAIN_FLUSH = QUEUE_ORDERED_DRAIN |
 			QUEUE_ORDERED_PREFLUSH | QUEUE_ORDERED_POSTFLUSH, 
-	//先执行前刷，屏障IO，再强制刷新(而不是后刷)			
+	/* 先执行前刷，屏障IO，再强制刷新(而不是后刷) */
 	QUEUE_ORDERED_DRAIN_FUA	= QUEUE_ORDERED_DRAIN |			
 			QUEUE_ORDERED_PREFLUSH | QUEUE_ORDERED_FUA,
 	QUEUE_ORDERED_TAG_FLUSH	= QUEUE_ORDERED_TAG |
@@ -485,7 +502,7 @@ enum {
 	/*
 	 * Ordered operation sequence
 	 */
-	//每个屏障IO请求的状态机
+	/* 每个屏障IO请求的状态机 */
 	QUEUE_ORDSEQ_STARTED	= 0x01,	/* flushing in progress */
 	QUEUE_ORDSEQ_DRAIN	= 0x02,	/* waiting for the queue to be drained */
 	QUEUE_ORDSEQ_PREFLUSH	= 0x04,	/* pre-flushing in progress */
@@ -499,11 +516,11 @@ enum {
 #define blk_queue_stopped(q)	test_bit(QUEUE_FLAG_STOPPED, &(q)->queue_flags)
 #define blk_queue_flushing(q)	((q)->ordseq)
 
-#define blk_fs_request(rq)	((rq)->flags & REQ_CMD)//命令来自应用进程
-#define blk_pc_request(rq)	((rq)->flags & REQ_BLOCK_PC)//这个命令来自SCSI子层
+#define blk_fs_request(rq)	((rq)->flags & REQ_CMD)/* 命令来自文件系统层 */
+#define blk_pc_request(rq)	((rq)->flags & REQ_BLOCK_PC)/* 命令来自SCSI子层 */
 #define blk_noretry_request(rq)	((rq)->flags & REQ_FAILFAST)
-#define blk_rq_started(rq)	((rq)->flags & REQ_STARTED)
-
+#define blk_rq_started(rq)	((rq)->flags & REQ_STARTED)		/*REQ_STARTED标志在elv_next_request中设置*/
+/* 开始执行的REQ_CMD请求 */
 #define blk_account_rq(rq)	(blk_rq_started(rq) && blk_fs_request(rq))
 
 #define blk_pm_suspend_request(rq)	((rq)->flags & REQ_PM_SUSPEND)
@@ -683,9 +700,9 @@ static inline int rq_all_done(struct request *rq, unsigned int nr_bytes)
 #define end_io_error(uptodate)	(unlikely((uptodate) <= 0))
 
 /**ltl
-功能:把request从派发队列中删除
-参数:req	->请求对象
-*/
+ * 功能:把request从派发队列中删除
+ * 参数:req	->请求对象
+ */
 static inline void blkdev_dequeue_request(struct request *req)
 {
 	elv_dequeue_request(req->q, req);
@@ -695,10 +712,10 @@ static inline void blkdev_dequeue_request(struct request *req)
  * This should be in elevator.h, but that requires pulling in rq and q
  */
 /**ltl
-功能:把request添加到等待队列中，这个request要先从IO调度队列中脱离
-参数:q	->要插入的等待队列
-	rq	->从IO调度器的调度队列脱离的request
-*/
+ * 功能:把request添加到派发队列中，这个request要先从IO调度队列中脱离
+ * 参数:q	->请求队列对象
+ *	rq	->从IO调度器的调度队列脱离的request
+ */
 static inline void elv_dispatch_add_tail(struct request_queue *q,
 					 struct request *rq)
 {
@@ -708,7 +725,7 @@ static inline void elv_dispatch_add_tail(struct request_queue *q,
 
 	q->end_sector = rq_end_sector(rq);
 	q->boundary_rq = rq;
-	list_add_tail(&rq->queuelist, &q->queue_head); //往队列尾部插入
+	list_add_tail(&rq->queuelist, &q->queue_head); /* 往队列尾部插入 */
 }
 
 /*

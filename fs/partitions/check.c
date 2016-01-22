@@ -407,9 +407,9 @@ static void disk_sysfs_symlinks(struct gendisk *disk)
 
 /* Not exported, helper to add_disk(). */
 /**ltl
-功能：将磁盘添加到sys中，并扫描磁盘分区。
-参数：disk:通用磁盘描述符
-*/
+ * 功能：将磁盘添加到sys中，并扫描磁盘分区。
+ * 参数：disk:通用磁盘描述符
+ */
 void register_disk(struct gendisk *disk)
 {
 	struct block_device *bdev;
@@ -418,45 +418,45 @@ void register_disk(struct gendisk *disk)
 	struct hd_struct *p;
 	int err;
 
-	/*用磁盘名字设备sys中的kobj的名字*/
+	/* 用磁盘名字设备sys中的kobj的名字 */
 	strlcpy(disk->kobj.name,disk->disk_name,KOBJ_NAME_LEN);
 	/* ewww... some of these buggers have / in name... */
 	s = strchr(disk->kobj.name, '/');
 	if (s)
 		*s = '!';
-	/*把disk添加到sys系统中*/
+	/* 把disk添加到sys系统中 */
 	if ((err = kobject_add(&disk->kobj)))
 		return;
 	/*在/sys/block/sda创建软链接文件device，这个文件是链接到文件
 		devices/pci0000:00/0000:00:10.0/host0/target0:0:0/0:0:0:0
 	*/
 	disk_sysfs_symlinks(disk);
-	/*在/sys/block/sda创建holders和slaves两个目录*/
+	/* 在/sys/block/sda创建holders和slaves两个目录 */
  	disk_sysfs_add_subdirs(disk);
 
 	/* No minors to use for partitions */
-	/*如果只存在子分区，则退出*/
+	/* 如果只存在子分区，则退出 */
 	if (disk->minors == 1)
 		goto exit;
 
 	/* No such device (e.g., media were just removed) */
-	/*如果设备的容量等于0，则退出*/
+	/* 如果设备的容量等于0，则退出 */
 	if (!get_capacity(disk))
 		goto exit;
 
-	/*通过通用磁盘描述符获取块设备描述符*/
+	/* 通过通用磁盘描述符获取块设备描述符 */
 	bdev = bdget_disk(disk, 0);
 	if (!bdev)
 		goto exit;
 
 	/* scan partition table, but suppress uevents */
-	/*bd_invalidated:1表示在blkdev_get时可以去扫描子分区，0:表示不能扫描子分区*/
+	/* bd_invalidated:1表示在blkdev_get时可以去扫描子分区，0:表示不能扫描子分区 */
 	bdev->bd_invalidated = 1;
-	/*part_uevent_suppress:1表示添加分区时可以向用户空间发送添加设备消息*/
+	/* part_uevent_suppress:1表示添加分区时可以向用户空间发送添加设备消息 */
 	disk->part_uevent_suppress = 1;
-	/*扫描分区*/
+	/* 扫描子分区 */
 	err = blkdev_get(bdev, FMODE_READ, 0);
-	/*扫描完分区后，重置此标志，使内核可以向用户空间发送消息*/
+	/* 扫描完分区后，重置此标志，使内核可以向用户空间发送消息 */
 	disk->part_uevent_suppress = 0;
 	if (err < 0)
 		goto exit;

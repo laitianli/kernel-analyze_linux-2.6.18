@@ -62,6 +62,7 @@ struct elv_fs_entry {
 /*
  * identifies an elevator type, such as AS or deadline
  */
+/* 调度算法类型 */
 struct elevator_type
 {
 	struct list_head list;
@@ -134,10 +135,10 @@ extern int elv_rq_merge_ok(struct request *, struct bio *);
 /*
  * Insertion selection
  */
-#define ELEVATOR_INSERT_FRONT	1
-#define ELEVATOR_INSERT_BACK	2
-#define ELEVATOR_INSERT_SORT	3
-#define ELEVATOR_INSERT_REQUEUE	4
+#define ELEVATOR_INSERT_FRONT	1	/* 将request对象插入到请求队列的队头 */
+#define ELEVATOR_INSERT_BACK	2	/* 将request对象插入到请求队列的队尾 */
+#define ELEVATOR_INSERT_SORT	3	/* 将request对象以一定的顺序插入到请求队列 */
+#define ELEVATOR_INSERT_REQUEUE	4	/* 将request对象重新插入到请求队列中 */
 
 /*
  * return values from elevator_may_queue_fn
