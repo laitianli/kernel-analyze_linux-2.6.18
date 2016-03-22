@@ -172,18 +172,18 @@ static int handshake (void __iomem *ptr, u32 mask, u32 done, int usec)
 /* force HC to halt state from unknown (EHCI spec section 2.3) */
 static int ehci_halt (struct ehci_hcd *ehci)
 {
-	u32	temp = readl (&ehci->regs->status);
+	u32	temp = readl (&ehci->regs->status); /* ¿ØÖÆÆ÷µÄ×´Ì¬¼Ä´æÆ÷ */
 
 	/* disable any irqs left enabled by previous code */
-	writel (0, &ehci->regs->intr_enable);
+	writel (0, &ehci->regs->intr_enable); /* ½ûÖ¹¿ØÖÆÆ÷²úÉúÖÐ¶Ï */
 
-	if ((temp & STS_HALT) != 0)
+	if ((temp & STS_HALT) != 0) /* ¿ØÖÆÆ÷´¦ÓÚ¹ÒÆð×´Ì¬ */
 		return 0;
 
-	temp = readl (&ehci->regs->command);
-	temp &= ~CMD_RUN;
-	writel (temp, &ehci->regs->command);
-	return handshake (&ehci->regs->status, STS_HALT, STS_HALT, 16 * 125);
+	temp = readl (&ehci->regs->command); /* ¶ÁÈ¡ÃüÁî¼Ä´æÆ÷ */
+	temp &= ~CMD_RUN;	/* È¥µôÔËÐÐÎ» */
+	writel (temp, &ehci->regs->command); 
+	return handshake (&ehci->regs->status, STS_HALT, STS_HALT, 16 * 125); /* µÈ´ý¿ØÖÆÆ÷´¦ÓÚHALT×´Ì¬ */
 }
 
 /* put TDI/ARC silicon into EHCI mode */
@@ -422,11 +422,11 @@ static int ehci_init(struct usb_hcd *hcd)
 	 * periodic_size can shrink by USBCMD update if hcc_params allows.
 	 */
 	ehci->periodic_size = DEFAULT_I_TDPS;
-	if ((retval = ehci_mem_init(ehci, GFP_KERNEL)) < 0)
+	if ((retval = ehci_mem_init(ehci, GFP_KERNEL)) < 0) /* ·ÖÅäÄÚ´æ³Ø */
 		return retval;
 
 	/* controllers may cache some of the periodic schedule ... */
-	hcc_params = readl(&ehci->caps->hcc_params);
+	hcc_params = readl(&ehci->caps->hcc_params); /* ¶ÁÈ¡¿ØÖÆ¼Ä´æÆ÷ */
 	
 	if (HCC_ISOC_CACHE(hcc_params)) 	// full frame cache
 		ehci->i_thresh = 8;

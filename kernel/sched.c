@@ -4598,6 +4598,7 @@ EXPORT_SYMBOL(yield);
  * But don't do that if it is a deliberate, throttling IO wait (this task
  * has set its backing_dev_info: the queue against which it should throttle)
  */
+/* 与schedule()函数差别是增加了对io操作的统计信息(nr_iowait), 这个信息在计算cpu_usage_state:iowait中用到 */
 void __sched io_schedule(void)
 {
 	struct rq *rq = &__raw_get_cpu_var(runqueues);

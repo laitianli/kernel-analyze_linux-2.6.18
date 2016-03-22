@@ -312,7 +312,7 @@ void elv_dispatch_sort(request_queue_t *q, struct request *rq)
 	list_add(&rq->queuelist, entry);
 }
 /**ltl
- * 功能: 根据系统的IO调度算法，找出请求队列中可以合入bio的request对象和要合入到request对象的列表位置
+ * 功能: 根据系统的IO调度算法，找出在请求队列中可以合入bio的request对象和要合入到request对象的列表位置
  * 参数:q	->请求队列
  *	req	->[out]可以合并的request,如果不能合并，值为空
  *	bio	->当前请求的bio对象

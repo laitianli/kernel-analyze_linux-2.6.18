@@ -6,6 +6,8 @@
  *
  *  Copyright (C) 2003 Jens Axboe <axboe@suse.de>
  */
+
+
 #include <linux/module.h>
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
@@ -46,7 +48,7 @@ static DEFINE_SPINLOCK(cfq_exit_lock);
  */
 #define CFQ_MHASH_SHIFT		6
 #define CFQ_MHASH_BLOCK(sec)	((sec) >> 3)
-#define CFQ_MHASH_ENTRIES	(1 << CFQ_MHASH_SHIFT)
+#define CFQ_MHASH_ENTRIES	(1 << CFQ_MHASH_SHIFT) /*64*/
 #define CFQ_MHASH_FN(sec)	hash_long(CFQ_MHASH_BLOCK(sec), CFQ_MHASH_SHIFT)
 #define rq_hash_key(rq)		((rq)->sector + (rq)->nr_sectors)
 #define list_entry_hash(ptr)	hlist_entry((ptr), struct cfq_rq, hash)
@@ -93,6 +95,10 @@ static struct completion *ioc_gone;
  */
 /*
  * 注:连接cfq_queue有列表:rr_list和Hash表:cfq_hash，这两者关系?
+ */
+/*
+ * CFQ基本思想: 力图为竞争块设备使用权的所有进程分配一个等同的时间片，在调度器分配给进程的时间片内，
+ *		   进程可以将其读写请求发送给底层块设备，当进程的时间片消耗完，进程的请求队列将被挂起，等待调度
  */
 struct cfq_data {
 	request_queue_t *queue; /* 请求队列对象 */
@@ -160,8 +166,8 @@ struct cfq_data {
 	 */
 	unsigned int cfq_quantum;
 	unsigned int cfq_queued;
-	unsigned int cfq_fifo_expire[2];//[0]表示异步操作的超时时间(HZ/4) --WRITE
-									//[1]表示同步操作的超时时间(HZ/8)--READ/WRITE_SYNC
+	unsigned int cfq_fifo_expire[2];/* [0]表示异步操作的超时时间(HZ/4) --WRITE
+									   [1]表示同步操作的超时时间(HZ/8)--READ/WRITE_SYNC */
 	unsigned int cfq_back_penalty;
 	unsigned int cfq_back_max;
 	unsigned int cfq_slice[2];
@@ -176,7 +182,7 @@ struct cfq_data {
  */
 /*
  * 1.一个cfq_queue对象存放着来自相同进程、相同IO优先级的request请求。
- * 2.主要包括三个队列:1.hash表(方便后插)；2.一棵红黑树(方便前插)；3.fifo队列(避免请求饿死)
+ * 2.主要包括三个队列:1.hash表(方便找到后插节点)；2.一棵红黑树(方便找到前插节点)；3.fifo队列(避免请求饿死)
  * 3.对一个磁盘的请求先组织成cfq_queue，然后再将所有的cfq_queue对象以Hash表示的形式组织起来，其中以进程PID为key,表头cfq_data:cfq_hash.
  */
 struct cfq_queue {
@@ -202,16 +208,16 @@ struct cfq_queue {
 	struct list_head fifo;/* 3.FIFO队列，节点为request，连接件为request:queuelist */
 
 	unsigned long slice_start;
-	unsigned long slice_end;
-	unsigned long slice_left;
+	unsigned long slice_end;	/* 一个cfq_queue可以执行的时间片，超时后此进程就要被换出不能再继续访问IO */
+	unsigned long slice_left;	/* 剩余时间片 */
 	unsigned long service_last; /* 最迟服务时刻 */
 
 	/* number of requests that are on the dispatch list */
 	int on_dispatch[2];	/* 已经分发到派发队列的request请求个数 */
 
 	/* io prio of this group */
-	unsigned short ioprio, org_ioprio;//进程的优先级,值:0~7
-	unsigned short ioprio_class, org_ioprio_class;//进程的优先级别，值分别:Run-time,best-effect,idle
+	unsigned short ioprio, org_ioprio;/* 进程的优先级,值:0~7 */
+	unsigned short ioprio_class, org_ioprio_class;/* 进程的优先级别，值分别:Run-time,best-effect,idle */
 
 	/* various state flags, see below */
 	unsigned int flags;
@@ -223,7 +229,7 @@ struct cfq_rq {
 	struct rb_node rb_node; /* 连接件，做为插入到cfq_queue:sort_list红黑树的连接件，此红黑树的key为rb_key，即请求的起始扇区号 */
 	sector_t rb_key;		/* 请求磁盘起始扇区 */
 	struct request *request;	/* 请求对象 */
-	struct hlist_node hash;    /* 连接件，做为插入到cfq_queue:cfq_hash的连接件*/
+	struct hlist_node hash;    /* 连接件，做为插入到cfq_data:crq_hash的连接件*/
 
 	struct cfq_queue *cfq_queue; /* 请求所属的cfq_queue对象 */
 	struct cfq_io_context *io_context; 
@@ -368,7 +374,7 @@ static int cfq_queue_empty(request_queue_t *q)
 */
 static inline pid_t cfq_queue_pid(struct task_struct *task, int rw)
 {
-	if (rw == READ || rw == WRITE_SYNC) /* 同步操作(读/同步写) */
+	if (rw == READ || rw == WRITE_SYNC) /* 同步操作(读/写、同步写读) */
 		return task->pid;
 
 	return CFQ_KEY_ASYNC;
@@ -380,8 +386,8 @@ static inline pid_t cfq_queue_pid(struct task_struct *task, int rw)
  * behind the head is penalized and only allowed to a certain extent.
  */
 /**ltl
-功能:从crq1和cfq2中选择最靠近磁头的请求。(这个函数的实现细节没有搞明白)
-*/
+ * 功能:从crq1和cfq2中选择最靠近磁头的请求。(这个函数的实现细节没有搞明白)
+ */
 static struct cfq_rq *
 cfq_choose_req(struct cfq_data *cfqd, struct cfq_rq *crq1, struct cfq_rq *crq2)
 {
@@ -605,7 +611,7 @@ cfq_del_cfqq_rr(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 /*
  * rb tree support functions
  */
-//从排序树中删除一个节点
+/* 从排序树中删除一个节点 */
 static inline void cfq_del_crq_rb(struct cfq_rq *crq)
 {
 	struct cfq_queue *cfqq = crq->cfq_queue;
@@ -614,7 +620,7 @@ static inline void cfq_del_crq_rb(struct cfq_rq *crq)
 
 	BUG_ON(!cfqq->queued[sync]);
 	cfqq->queued[sync]--;
-	//更新next_crq指针
+	/* 更新next_crq指针 */
 	cfq_update_next_crq(crq);
 
 	rb_erase(&crq->rb_node, &cfqq->sort_list);
@@ -623,8 +629,8 @@ static inline void cfq_del_crq_rb(struct cfq_rq *crq)
 		cfq_del_cfqq_rr(cfqd, cfqq); /* 1.清除标志；2.把cfqq对象移入到empty_list列表。 */
 }
 /**ltl
-功能:在排序队列(红黑树)中查找crq如果找到，直接返回，否则设置其父节点
-*/
+ * 功能:在排序队列(红黑树)中查找crq如果找到，直接返回，否则设置其父节点
+ */
 static struct cfq_rq *
 __cfq_add_crq_rb(struct cfq_rq *crq)
 {
@@ -644,16 +650,16 @@ __cfq_add_crq_rb(struct cfq_rq *crq)
 			return __crq;
 	}
 
-	rb_link_node(&crq->rb_node, parent, p);//设置父节点
+	rb_link_node(&crq->rb_node, parent, p);/* 设置父节点 */
 	return NULL;
 }
 /**ltl
-功能:把request插入到排序树中。同时要根据一定算法插入到busy_rr,idle_rr,cur_rr三个队列中
-参数:
-说明:主要完成两个步骤:
-	1.把请求插入到cfq_queue的红黑树中。
-	2.把cfq_queue对象添加到cfq_data的优先级队列中cfq_data:list_rr
-*/
+ * 功能:把request插入到排序树中。同时要根据一定算法插入到busy_rr,idle_rr,cur_rr三个队列中
+ * 参数:
+ *说明:主要完成两个步骤:
+ *	1.把请求插入到cfq_queue的红黑树中。
+ *	2.把cfq_queue对象添加到cfq_data的优先级队列中cfq_data:list_rr
+ */
 static void cfq_add_crq_rb(struct cfq_rq *crq)
 {
 	struct cfq_queue *cfqq = crq->cfq_queue;
@@ -661,14 +667,14 @@ static void cfq_add_crq_rb(struct cfq_rq *crq)
 	struct request *rq = crq->request;
 	struct cfq_rq *__alias;
 
-	crq->rb_key = rq_rb_key(rq);//设置cfq_rq的rb key值为磁盘的起始地址。
-	cfqq->queued[cfq_crq_is_sync(crq)]++;//cfq_queue中的request个数
+	crq->rb_key = rq_rb_key(rq);/* 设置cfq_rq的rb key值为磁盘的起始地址。*/
+	cfqq->queued[cfq_crq_is_sync(crq)]++;/* cfq_queue中的request个数 */
 
 	/*
 	 * looks a little odd, but the first insert might return an alias.
 	 * if that happens, put the alias on the dispatch list
 	 */
-	while ((__alias = __cfq_add_crq_rb(crq)) != NULL)//如果在红黑树中已经存在key值相同的节点，则把当前请求派发到派发队列中
+	while ((__alias = __cfq_add_crq_rb(crq)) != NULL)/* 如果在红黑树中已经存在key值相同的节点，则把当前请求派发到派发队列中 */
 		cfq_dispatch_insert(cfqd->queue, __alias);
 	/* 1.新插入的节点存放到红黑树中 */
 	rb_insert_color(&crq->rb_node, &cfqq->sort_list);
@@ -680,7 +686,7 @@ static void cfq_add_crq_rb(struct cfq_rq *crq)
 	/*
 	 * check if this request is a better next-serve candidate
 	 */
-	 //记录下个节点的地址
+	 /* 记录下个节点的地址 */
 	cfqq->next_crq = cfq_choose_req(cfqd, cfqq->next_crq, crq);
 }
 
@@ -694,10 +700,10 @@ cfq_reposition_crq_rb(struct cfq_queue *cfqq, struct cfq_rq *crq)
 	cfq_add_crq_rb(crq);
 }
 /**ltl
-功能:在排序树中查找可以与bio合并的request
-参数:
-返回值:
-*/
+ * 功能:在排序树中查找可以与bio合并的request
+ * 参数:
+ * 返回值:
+ */
 static struct request *
 cfq_find_rq_fmerge(struct cfq_data *cfqd, struct bio *bio)
 {
@@ -706,7 +712,7 @@ cfq_find_rq_fmerge(struct cfq_data *cfqd, struct bio *bio)
 	struct cfq_queue *cfqq;
 	struct rb_node *n;
 	sector_t sector;
-	//根据进程PID值从Hash表中获取cfq_queue对象
+	/* 根据进程PID值从Hash表中获取cfq_queue对象 */
 	cfqq = cfq_find_cfq_hash(cfqd, key, tsk->ioprio);
 	if (!cfqq)
 		goto out;
@@ -752,38 +758,38 @@ static void cfq_deactivate_request(request_queue_t *q, struct request *rq)
 	cfqd->rq_in_driver--;
 }
 /**ltl
-功能:把rq对象从三个列表中脱落，成为孤立节点。
-参数:
-返回值:
-*/
+ * 功能:把rq对象从三个列表中脱落，成为孤立节点。
+ * 参数:
+ * 返回值:
+ */
 static void cfq_remove_request(struct request *rq)
 {
 	struct cfq_rq *crq = RQ_DATA(rq);
-	//1.从列表中删除
+	/* 1.从列表中删除 */
 	list_del_init(&rq->queuelist);
-	//2.从排序树中删除
+	/* 2.从排序树中删除 */
 	cfq_del_crq_rb(crq);
-	//3.从hash表中删除
+	/* 3.从hash表中删除 */
 	cfq_del_crq_hash(crq);
 }
 /**ltl
-功能:获取bio添加到req的位置
-参数:
-返回值:
-*/
+ * 功能:获取bio添加到req的位置
+ * 参数:
+ * 返回值:
+ */
 static int
 cfq_merge(request_queue_t *q, struct request **req, struct bio *bio)
 {
 	struct cfq_data *cfqd = q->elevator->elevator_data;
 	struct request *__rq;
 	int ret;
-	//从Hash中获取可以与bio合并的request (Q:后插为什么用Hash表?)
+	/* 从Hash中获取可以与bio合并的request (Q:后插为什么用Hash表?) */
 	__rq = cfq_find_rq_hash(cfqd, bio->bi_sector);
 	if (__rq && elv_rq_merge_ok(__rq, bio)) {/* 判定是否能够合并 */
 		ret = ELEVATOR_BACK_MERGE;
 		goto out;
 	}
-	//从排序树中获取可以与bio合并的request (Q:前插入为什么要用红黑树呢? 用Hash表示可以吗? 是为了方便求出下一个请求(next_rq)吗?)
+	/* 从排序树中获取可以与bio合并的request (Q:前插入为什么要用红黑树呢? 用Hash表示可以吗? 是为了方便求出下一个请求(next_rq)吗?) */
 	__rq = cfq_find_rq_fmerge(cfqd, bio);
 	if (__rq && elv_rq_merge_ok(__rq, bio)) { /* 判定是否能够合并 */
 		ret = ELEVATOR_FRONT_MERGE;
@@ -796,52 +802,52 @@ out:
 	return ret;
 }
 /**ltl
-功能:这个函数调整request中与CFQ调度算法相关的数据，在此之前，已经有一个bio与req进行合并
-参数:
-返回值:
-*/
+ * 功能:这个函数调整request中与CFQ调度算法相关的数据，在此之前，已经有一个bio与req进行合并
+ * 参数:
+ * 返回值:
+ */
 static void cfq_merged_request(request_queue_t *q, struct request *req)
 {
 	struct cfq_data *cfqd = q->elevator->elevator_data;
 	struct cfq_rq *crq = RQ_DATA(req);
 	
-	cfq_del_crq_hash(crq);//先从hash表中脱落
-	cfq_add_crq_hash(cfqd, crq);//重新插入到hash表中(req的section和sectio_size已经发生了变化)
+	cfq_del_crq_hash(crq);/* 先从hash表中脱落 */
+	cfq_add_crq_hash(cfqd, crq);/* 重新插入到hash表中(req的section和sectio_size已经发生了变化) */
 
-	if (rq_rb_key(req) != crq->rb_key) {//rb_key:记录的是在bio合到request之前的数值
+	if (rq_rb_key(req) != crq->rb_key) {/* rb_key:记录的是在bio合到request之前的数值 */
 		struct cfq_queue *cfqq = crq->cfq_queue;
 
-		cfq_update_next_crq(crq);//重新记录crq_next地址
-		cfq_reposition_crq_rb(cfqq, crq);//调整request在排序树中的位置
+		cfq_update_next_crq(crq);/* 重新记录crq_next地址 */
+		cfq_reposition_crq_rb(cfqq, crq);/* 调整request在排序树中的位置 */
 	}
 }
 /**ltl
-功能:调整rq在调度器中的位置，并删除next对象。在调用这个函数之前，已经把next的数据合入到rq中。
-参数:
-返回值:
-*/
+ * 功能:调整rq在调度器中的位置，并删除next对象。在调用这个函数之前，已经把next的数据合入到rq中。
+ * 参数:
+ * 返回值:
+ */
 static void
 cfq_merged_requests(request_queue_t *q, struct request *rq,
 		    struct request *next)
 {
-	//调整rq在IO调度器的位置
+	/* 调整rq在IO调度器的位置 */
 	cfq_merged_request(q, rq);
 
 	/*
 	 * reposition in fifo if next is older than rq
 	 */
-	 //Q:为什么要这步呢?
+	 /*Q:为什么要这步呢?*/
 	if (!list_empty(&rq->queuelist) && !list_empty(&next->queuelist) &&
 	    time_before(next->start_time, rq->start_time))
 		list_move(&rq->queuelist, &next->queuelist);
-	//把rq对象从三个列表中脱落，成为孤立节点。
+	/* 把rq对象从三个列表中脱落，成为孤立节点。*/
 	cfq_remove_request(next);
 }
 /**ltl
-功能:设置活动的CFQ队列
-参数:
-返回值:
-*/
+ * 功能:设置活动的CFQ队列
+ * 参数:
+ * 返回值:
+ */
 static inline void
 __cfq_set_active_queue(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 {
@@ -890,7 +896,7 @@ __cfq_slice_expired(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 	 * store what was left of this slice, if the queue idled out
 	 * or was preempted
 	 */
-	if (time_after(cfqq->slice_end, now))
+	if (time_after(cfqq->slice_end, now))/* 更新cfq_queue剩余时间片 */
 		cfqq->slice_left = cfqq->slice_end - now;
 	else
 		cfqq->slice_left = 0;
@@ -987,9 +993,9 @@ static int cfq_get_next_prio_level(struct cfq_data *cfqd)
 	return prio;
 }
 /**ltl
-功能:获取active cfq_queue，从这个cfq_queue中的队列的元素分发到派发队列
-参数:
-*/
+ * 功能:获取active cfq_queue，从这个cfq_queue中的队列的元素分发到派发队列
+ * 参数:
+ */
 static struct cfq_queue *cfq_set_active_queue(struct cfq_data *cfqd)
 {
 	struct cfq_queue *cfqq = NULL;
@@ -998,7 +1004,7 @@ static struct cfq_queue *cfq_set_active_queue(struct cfq_data *cfqd)
 	 * if current list is non-empty, grab first entry. if it is empty,
 	 * get next prio level and grab first entry then if any are spliced
 	 */
-	//如果cur_rr列表不为空，或者下一级别的列表也不为空，则从cur_rr列表中取出第一个对象标记为active_queue,并返回这个cfg_queue
+	/* 如果cur_rr列表不为空，或者下一级别的列表也不为空，则从cur_rr列表中取出第一个对象标记为active_queue,并返回这个cfg_queue */
 	if (!list_empty(&cfqd->cur_rr) || cfq_get_next_prio_level(cfqd) != -1)
 		cfqq = list_entry_cfqq(cfqd->cur_rr.next);
 
@@ -1006,7 +1012,7 @@ static struct cfq_queue *cfq_set_active_queue(struct cfq_data *cfqd)
 	 * If no new queues are available, check if the busy list has some
 	 * before falling back to idle io.
 	 */
-	//如果busy_rr队列不空，取出第一个作为active_queue
+	/* 如果busy_rr队列不空，取出第一个作为active_queue */
 	if (!cfqq && !list_empty(&cfqd->busy_rr))
 		cfqq = list_entry_cfqq(cfqd->busy_rr.next);
 
@@ -1015,7 +1021,7 @@ static struct cfq_queue *cfq_set_active_queue(struct cfq_data *cfqd)
 	 * requests, either allow immediate service if the grace period
 	 * has passed or arm the idle grace timer
 	 */
-	//如果idle队列不为空，并且离上一次操作完成已经过了HZ/10，则从这个队列取出cfg_queue,并置为active_queue
+	/* 如果idle队列不为空，并且离上一次操作完成已经过了HZ/10，则从这个队列取出cfg_queue,并置为active_queue */
 	if (!cfqq && !list_empty(&cfqd->idle_rr)) {
 		unsigned long end = cfqd->last_end_request + CFQ_IDLE_GRACE;
 
@@ -1071,31 +1077,31 @@ static int cfq_arm_slice_timer(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 	return 1;
 }
 /**ltl
-功能:把request移到派发队列中。
-参数:
-返回值:
-*/
+ * 功能:把request移到派发队列中。
+ * 参数:
+ * 返回值:
+ */
 static void cfq_dispatch_insert(request_queue_t *q, struct cfq_rq *crq)
 {
 	struct cfq_data *cfqd = q->elevator->elevator_data;
 	struct cfq_queue *cfqq = crq->cfq_queue;
 	struct request *rq;
 
-	cfqq->next_crq = cfq_find_next_crq(cfqd, cfqq, crq);//记录下一个cfq_rq对象地址(离当前磁头最近的请求)
-	cfq_remove_request(crq->request);//从三个队列(list,rb_tree,hash)删除节点
-	cfqq->on_dispatch[cfq_crq_is_sync(crq)]++;//到派发队列的个数
-	elv_dispatch_sort(q, crq->request);//把request从IO调度队列中转到派发队列中
+	cfqq->next_crq = cfq_find_next_crq(cfqd, cfqq, crq);/* 记录下一个cfq_rq对象地址(离当前磁头最近的请求) */
+	cfq_remove_request(crq->request);/* 从三个队列(list,rb_tree,hash)删除节点 */
+	cfqq->on_dispatch[cfq_crq_is_sync(crq)]++;/* 到派发队列的个数 */
+	elv_dispatch_sort(q, crq->request);/* 把request从IO调度队列中转到派发队列中 */
 
 	rq = list_entry(q->queue_head.prev, struct request, queuelist);
-	cfqd->last_sector = rq->sector + rq->nr_sectors;//记录最后一个扇区号，在cfq_find_next_crq中会用到。
+	cfqd->last_sector = rq->sector + rq->nr_sectors;/* 记录最后一个扇区号，在cfq_find_next_crq中会用到。*/
 }
 
 /*
  * return expired entry, or NULL to just start from scratch in rbtree
  */
 /**ltl
-功能:判定FIFO队列中的请求是否已经过期
-*/
+ * 功能:判定FIFO队列中的请求是否已经过期
+ */
 static inline struct cfq_rq *cfq_check_fifo(struct cfq_queue *cfqq)
 {
 	struct cfq_data *cfqd = cfqq->cfqd;
@@ -1106,11 +1112,11 @@ static inline struct cfq_rq *cfq_check_fifo(struct cfq_queue *cfqq)
 		return NULL;
 
 	if (!list_empty(&cfqq->fifo)) {
-		int fifo = cfq_cfqq_class_sync(cfqq);//获取同步标志
+		int fifo = cfq_cfqq_class_sync(cfqq);/* 获取同步标志 */
 		/* 取FIFO队列头元素 */
 		crq = RQ_DATA(list_entry_fifo(cfqq->fifo.next));
 		rq = crq->request;
-		//已经超时
+		/* 已经超时 */
 		if (time_after(jiffies, rq->start_time + cfqd->cfq_fifo_expire[fifo])) {
 			cfq_mark_cfqq_fifo_expire(cfqq);
 			return crq;
@@ -1166,7 +1172,7 @@ static struct cfq_queue *cfq_select_queue(struct cfq_data *cfqd)
 	/*
 	 * slice has expired
 	 */
-	// 没有设置dispatch标志，但时间片已经过，则分发请求到派发队列
+	/*  没有设置dispatch标志，但时间片已经过，则分发请求到派发队列 */
 	if (!cfq_cfqq_must_dispatch(cfqq) && time_after(now, cfqq->slice_end))
 		goto expire;
 
@@ -1179,7 +1185,7 @@ static struct cfq_queue *cfq_select_queue(struct cfq_data *cfqd)
 	else if (cfq_cfqq_dispatched(cfqq)) { /* 活动队列正在分发请求，则不能再分发队列了。 */
 		cfqq = NULL;
 		goto keep_queue;
-	} else if (cfq_cfqq_class_sync(cfqq)) { /* 活动队列是一个同步请求 */
+	} else if (cfq_cfqq_class_sync(cfqq)) { /* 活动队列是一个同步请求 (读/写) */
 		if (cfq_arm_slice_timer(cfqd, cfqq))
 			return NULL;
 	}
@@ -1187,15 +1193,15 @@ static struct cfq_queue *cfq_select_queue(struct cfq_data *cfqd)
 expire:
 	cfq_slice_expired(cfqd, 0); /* 以非抢占方式更新cfq队列的时间片 */
 new_queue:
-	cfqq = cfq_set_active_queue(cfqd);//设置active_queue，
+	cfqq = cfq_set_active_queue(cfqd);/* 设置active_queue，*/
 keep_queue:
 	return cfqq;
 }
 /**ltl
-功能:
-参数:
-返回值:
-*/
+ * 功能:
+ * 参数:
+ * 返回值:
+ */
 static int
 __cfq_dispatch_requests(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 			int max_dispatch/*4*/)
@@ -1217,7 +1223,7 @@ __cfq_dispatch_requests(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 		/*
 		 * finally, insert request into driver dispatch list
 		 */
-		//把request分发到派发队列中
+		/* 把request分发到派发队列中 */
 		cfq_dispatch_insert(cfqd->queue, crq);
 
 		cfqd->dispatch_slice++;
@@ -1227,7 +1233,7 @@ __cfq_dispatch_requests(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 			atomic_inc(&crq->io_context->ioc->refcount);
 			cfqd->active_cic = crq->io_context;
 		}
-		//排序队列已经为空
+		/* 排序队列已经为空 */
 		if (RB_EMPTY_ROOT(&cfqq->sort_list))
 			break;
 
@@ -1252,10 +1258,10 @@ __cfq_dispatch_requests(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 	return dispatched;
 }
 /**ltl
-功能:强制分发list队列中的请求
-参数:
-返回值:
-*/
+ * 功能:强制分发list队列中的请求
+ * 参数:
+ * 返回值:
+ */
 static int
 cfq_forced_dispatch_cfqqs(struct list_head *list)
 {
@@ -1275,10 +1281,10 @@ cfq_forced_dispatch_cfqqs(struct list_head *list)
 	return dispatched;
 }
 /**ltl
-功能:
-参数:
-返回值:
-*/
+ * 功能:
+ * 参数:
+ * 返回值:
+ */
 static int
 cfq_forced_dispatch(struct cfq_data *cfqd)
 {
@@ -1286,11 +1292,11 @@ cfq_forced_dispatch(struct cfq_data *cfqd)
 
 	for (i = 0; i < CFQ_PRIO_LISTS; i++)
 		dispatched += cfq_forced_dispatch_cfqqs(&cfqd->rr_list[i]);
-	//强制分配busy队列中的请求
+	/* 强制分配busy队列中的请求 */
 	dispatched += cfq_forced_dispatch_cfqqs(&cfqd->busy_rr);
-	//强制分发cur队列中的请求
+	/* 强制分发cur队列中的请求 */
 	dispatched += cfq_forced_dispatch_cfqqs(&cfqd->cur_rr);
-	//强制分发idle队列中的请求
+	/* 强制分发idle队列中的请求 */
 	dispatched += cfq_forced_dispatch_cfqqs(&cfqd->idle_rr);
 
 	cfq_slice_expired(cfqd, 0);
@@ -1314,7 +1320,7 @@ cfq_dispatch_requests(request_queue_t *q, int force)
 	if (!cfqd->busy_queues)
 		return 0;
 
-	if (unlikely(force))//强制分发到派发队列
+	if (unlikely(force))/* 强制分发到派发队列 */
 		return cfq_forced_dispatch(cfqd);
 
 	dispatched = 0;
@@ -1336,7 +1342,7 @@ cfq_dispatch_requests(request_queue_t *q, int force)
 		
 		/* 一次最多只能把cfq_queue中的4个请求转移到派发队列 */
 		max_dispatch = cfqd->cfq_quantum;/*4*/
-		if (cfq_class_idle(cfqq))//如果active_queue是idle_rr,则此次最多分发1个
+		if (cfq_class_idle(cfqq))/* 如果active_queue是idle_rr,则此次最多分发1个 */
 			max_dispatch = 1;
 		
 		dispatched += __cfq_dispatch_requests(cfqd, cfqq, max_dispatch);
@@ -1544,11 +1550,11 @@ static void cfq_init_prio_data(struct cfq_queue *cfqq)
 			cfqq->ioprio = task_ioprio(tsk);
 			cfqq->ioprio_class = IOPRIO_CLASS_RT;
 			break;
-		case IOPRIO_CLASS_BE://best-effect
+		case IOPRIO_CLASS_BE:/* best-effect */
 			cfqq->ioprio = task_ioprio(tsk);
 			cfqq->ioprio_class = IOPRIO_CLASS_BE;
 			break;
-		case IOPRIO_CLASS_IDLE://空闲
+		case IOPRIO_CLASS_IDLE:/* 空闲 */
 			cfqq->ioprio_class = IOPRIO_CLASS_IDLE;
 			cfqq->ioprio = 7;
 			cfq_clear_cfqq_idle_window(cfqq);
@@ -1619,10 +1625,13 @@ static int cfq_ioc_set_ioprio(struct io_context *ioc, unsigned int ioprio)
 	return 0;
 }
 /**ltl
-功能:分配cfg_queue空间
-参数:
-返回值:
-*/
+ * 功能:分配cfg_queue空间
+ * 参数: cfqd	->cfq_data对象
+ *		key	->进程PID
+ *		task	->当前状态
+ *		gfp_mask->
+ * 返回值:
+ */
 static struct cfq_queue *
 cfq_get_queue(struct cfq_data *cfqd, unsigned int key, struct task_struct *tsk,
 	      gfp_t gfp_mask)
@@ -1632,7 +1641,7 @@ cfq_get_queue(struct cfq_data *cfqd, unsigned int key, struct task_struct *tsk,
 	unsigned short ioprio;
 
 retry:
-	ioprio = tsk->ioprio;//进程的IO优先级别
+	ioprio = tsk->ioprio;/* 进程的IO优先级别 */
 	cfqq = __cfq_find_cfq_hash(cfqd, key, ioprio, hashval); /* 在cfq_data:cfq_hash[pid] Hash列表中查找 */
 
 	if (!cfqq) {
@@ -1658,7 +1667,7 @@ retry:
 		INIT_LIST_HEAD(&cfqq->cfq_list);
 		INIT_LIST_HEAD(&cfqq->fifo);
 
-		cfqq->key = key;//进程PID
+		cfqq->key = key;/* 进程PID */
 		hlist_add_head(&cfqq->cfq_hash, &cfqd->cfq_hash[hashval]);/* 将cfq_queue链接到cfq_data */
 		atomic_set(&cfqq->ref, 0);
 		cfqq->cfqd = cfqd;
@@ -1736,13 +1745,13 @@ cfq_cic_link(struct cfq_data *cfqd, struct io_context *ioc,
 	void *k;
 
 	cic->ioc = ioc;
-	cic->key = cfqd;//cfg_io_context的key值---cfg_data对象
+	cic->key = cfqd;/* cfg_io_context的key值---cfg_data对象 */
 
 	ioc->set_ioprio = cfq_ioc_set_ioprio;
 restart:
 	parent = NULL;
 	p = &ioc->cic_root.rb_node;
-	while (*p) {//寻找cic的父节点parent
+	while (*p) {/* 寻找cic的父节点parent */
 		parent = *p;
 		__cic = rb_entry(parent, struct cfq_io_context, rb_node);
 		/* ->key must be copied to avoid race with cfq_exit_queue() */
@@ -1761,7 +1770,7 @@ restart:
 	}
 
 	spin_lock(&cfq_exit_lock);
-	rb_link_node(&cic->rb_node, parent, p);// 设置cic的父节点
+	rb_link_node(&cic->rb_node, parent, p);/* 设置cic的父节点 */
 	rb_insert_color(&cic->rb_node, &ioc->cic_root);/*把cfg_io_context对象插入到进程上下文中,红黑树节点个数表示进程访问的磁盘个数 */
 	list_add(&cic->queue_list, &cfqd->cic_list); /* 将cfq_io_context对象插入到cfq_data对象中，列表中对象的个数表示正在访问此磁盘的进程数 */
 	spin_unlock(&cfq_exit_lock);
@@ -1779,19 +1788,19 @@ cfq_get_io_context(struct cfq_data *cfqd, gfp_t gfp_mask)
 	struct cfq_io_context *cic;
 
 	might_sleep_if(gfp_mask & __GFP_WAIT);
-	//获取与当前进程相关联的io_context对象
+	/* 获取与当前进程相关联的io_context对象 */
 	ioc = get_io_context(gfp_mask);
 	if (!ioc)
 		return NULL;
-	//根据io_context对象，从红黑树中查找cfg_io_context对象
+	/* 根据io_context对象，从红黑树中查找cfg_io_context对象 */
 	cic = cfq_cic_rb_lookup(cfqd, ioc);
-	if (cic)//因为是第一次，所有如果在树中已经存在对象，刚肯定是出错
+	if (cic)
 		goto out;
-	//分配cfg_io_context对象
+	/* 分配cfg_io_context对象 */
 	cic = cfq_alloc_io_context(cfqd, gfp_mask);
 	if (cic == NULL)
 		goto err;
-	//把cic插入到进程上下文(cfg_io_context)中
+	/* 把cic插入到进程上下文(io_context)中 */
 	cfq_cic_link(cfqd, ioc, cic);
 out:
 	return cic;
@@ -1895,13 +1904,13 @@ cfq_should_preempt(struct cfq_data *cfqd, struct cfq_queue *new_cfqq,
 		   struct cfq_rq *crq)
 {
 	struct cfq_queue *cfqq = cfqd->active_queue;
-
+	/* 新的cfq_queue是Idle级别，则不能抢占其它cfq_queue */
 	if (cfq_class_idle(new_cfqq))
 		return 0;
 
 	if (!cfqq)
 		return 0;
-
+	/* 原先的cfq_queue就idle级别，可以允许新的去抢占 */
 	if (cfq_class_idle(cfqq))
 		return 1;
 	if (!cfq_cfqq_wait_request(new_cfqq))
@@ -1911,7 +1920,7 @@ cfq_should_preempt(struct cfq_data *cfqd, struct cfq_queue *new_cfqq,
 	 */
 	if (new_cfqq->slice_left < cfqd->cfq_slice_idle)
 		return 0;
-	if (cfq_crq_is_sync(crq) && !cfq_cfqq_sync(cfqq))
+	if (cfq_crq_is_sync(crq) && !cfq_cfqq_sync(cfqq)) /* crq是一个同步操作，而active_queue是一个异步列表，因此可以抢占 */
 		return 1;
 
 	return 0;
@@ -2029,16 +2038,16 @@ static void cfq_insert_request(request_queue_t *q, struct request *rq)
 	struct cfq_data *cfqd = q->elevator->elevator_data;
 	struct cfq_rq *crq = RQ_DATA(rq);
 	struct cfq_queue *cfqq = crq->cfq_queue;
-	//初始化cfq_queue优先级别信息
+	/* 初始化cfq_queue优先级别信息 */
 	cfq_init_prio_data(cfqq);
-	//1.插入到排序树中，同时重排cfqq在cfq_data的队列中位置
+	/* 1.插入到排序树中，同时重排cfqq在cfq_queue:sort_list红黑树中 */
 	cfq_add_crq_rb(crq);
-	//2.插入到FIFO中
+	/* 2.插入到cfq_queue:FIFO中 */
 	list_add_tail(&rq->queuelist, &cfqq->fifo);
-	//3.插入到Hash表示中
+	/* 3.插入到cfq_data的Hash表示中(此Hash只为了找到后插的位置用到) */
 	if (rq_mergeable(rq))
 		cfq_add_crq_hash(cfqd, crq);
-	//4.在插入新的请求后，要去检查是否有请求已经超时而要马上去处理
+	/* 4.在插入新的请求后，要去检查是否有请求已经超时而要马上去处理 */
 	cfq_crq_enqueued(cfqd, cfqq, crq);
 }
 /**ltl
@@ -2242,14 +2251,14 @@ cfq_set_request(request_queue_t *q, struct request *rq, struct bio *bio,
 	struct task_struct *tsk = current;
 	struct cfq_io_context *cic;
 	const int rw = rq_data_dir(rq);
-	pid_t key = cfq_queue_pid(tsk, rw);//获取进程的PID
+	pid_t key = cfq_queue_pid(tsk, rw);/* 获取进程的PID */
 	struct cfq_queue *cfqq;
 	struct cfq_rq *crq;
 	unsigned long flags;
-	int is_sync = key != CFQ_KEY_ASYNC;//是否是同步
+	int is_sync = key != CFQ_KEY_ASYNC;/* 是否是同步 */
 
 	might_sleep_if(gfp_mask & __GFP_WAIT);
-	//申请cfg_io_context对象，并插入到进程上下文中io_context
+	/* 申请cfg_io_context对象，并插入到进程上下文中io_context */
 	cic = cfq_get_io_context(cfqd, gfp_mask);
 
 	spin_lock_irqsave(q->queue_lock, flags);
@@ -2257,7 +2266,7 @@ cfq_set_request(request_queue_t *q, struct request *rq, struct bio *bio,
 	if (!cic)
 		goto queue_fail;
 
-	if (!cic->cfqq[is_sync]) {//分配cfg_queue
+	if (!cic->cfqq[is_sync]) {/* 分配cfg_queue */
 		cfqq = cfq_get_queue(cfqd, key, tsk, gfp_mask);
 		if (!cfqq)
 			goto queue_fail;
@@ -2265,13 +2274,13 @@ cfq_set_request(request_queue_t *q, struct request *rq, struct bio *bio,
 		cic->cfqq[is_sync] = cfqq;
 	} else
 		cfqq = cic->cfqq[is_sync];
-	//递增分配计数器
+	/* 递增分配计数器 */
 	cfqq->allocated[rw]++;
 	cfq_clear_cfqq_must_alloc(cfqq);
 	cfqd->rq_starved = 0;
 	atomic_inc(&cfqq->ref);
 	spin_unlock_irqrestore(q->queue_lock, flags);
-	//分配cfg_rq,并与request关联,并对cfg_rq中的部分成员变量初始化(注:此时cfq_rq对象并没有插入到cfq_queue对象列表中)
+	/* 分配cfg_rq,并与request关联,并对cfg_rq中的部分成员变量初始化(注:此时cfq_rq对象并没有插入到cfq_queue对象列表中) */
 	crq = mempool_alloc(cfqd->crq_pool, gfp_mask);
 	if (crq) {
 		RB_CLEAR_NODE(&crq->rb_node);

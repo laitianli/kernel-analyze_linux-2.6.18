@@ -65,7 +65,7 @@ int register_blkdev(unsigned int major, const char *name)
 	mutex_lock(&block_subsys_lock);
 
 	/* temporary */
-	if (major == 0) {/* 从全局的数据找到一个没有被用过的主设备号*/
+	if (major == 0) {/* 从全局的数据找到一个没有被用过的主设备号(从大到小)*/
 		for (index = ARRAY_SIZE(major_names)-1; index > 0; index--) {
 			if (major_names[index] == NULL)
 				break;

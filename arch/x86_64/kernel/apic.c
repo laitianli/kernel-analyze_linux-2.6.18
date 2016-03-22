@@ -751,9 +751,7 @@ static void setup_APIC_timer(unsigned int clocks)
 	/* wait for irq slice */
  	if (vxtime.hpet_address && hpet_use_timer) {
  		int trigger = hpet_readl(HPET_T0_CMP);
- 		while (hpet_readl(HPET_COUNTER) >= trigger)
- 			/* do nothing */ ;
- 		while (hpet_readl(HPET_COUNTER) <  trigger)
+ 		while (hpet_readl(HPET_T0_CMP) == trigger)
  			/* do nothing */ ;
  	} else {
 		int c1, c2;
@@ -870,7 +868,12 @@ void __cpuinit setup_secondary_APIC_clock(void)
 	setup_APIC_timer(calibration_result);
 	local_irq_enable();
 }
-
+/**ltl
+ * 功能: 禁用Local APIC中断
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void disable_APIC_timer(void)
 {
 	if (using_apic_timer) {
@@ -891,7 +894,12 @@ void disable_APIC_timer(void)
 		apic_write(APIC_LVTT, v);
 	}
 }
-
+/**ltl
+ * 功能: 开启Local APIC中断
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void enable_APIC_timer(void)
 {
 	int cpu = smp_processor_id();
@@ -904,6 +912,7 @@ void enable_APIC_timer(void)
 		apic_write(APIC_LVTT, v & ~APIC_LVT_MASKED);
 	}
 }
+
 
 void switch_APIC_timer_to_ipi(void *cpumask)
 {
@@ -927,7 +936,12 @@ void smp_send_timer_broadcast_ipi(void)
 		send_IPI_mask(mask, LOCAL_TIMER_VECTOR);
 	}
 }
-
+/**ltl
+ * 功能: 开启Local APIC中断
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void switch_ipi_to_APIC_timer(void *cpumask)
 {
 	cpumask_t mask = *(cpumask_t *)cpumask;

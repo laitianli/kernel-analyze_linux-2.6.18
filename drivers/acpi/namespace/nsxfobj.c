@@ -61,10 +61,10 @@ ACPI_MODULE_NAME("nsxfobj");
  *
  ******************************************************************************/
 /**ltl
- * 功能:获取命令空间的类型
+ * 功能:获取对象类型
  * 参数:
  * 返回值:
- * 说明:类型值分别为ACPI_TYPE_INTEGER,ACPI_TYPE_STRING等
+ * 说明:类型值分别为ACPI_TYPE_INTEGER,ACPI_TYPE_STRING、ACPI_TYPE_THERMAL、ACPI_TYPE_PROCESSOR等
  */ 
 acpi_status acpi_get_type(acpi_handle handle, acpi_object_type * ret_type)
 {

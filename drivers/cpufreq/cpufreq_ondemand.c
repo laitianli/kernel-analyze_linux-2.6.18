@@ -67,6 +67,8 @@ struct cpu_dbs_info_s {
 	unsigned int enable:1,
 	             sample_type:1;
 };
+
+/* 定义每CPU全局变量: cpu_dbs_info */
 static DEFINE_PER_CPU(struct cpu_dbs_info_s, cpu_dbs_info);
 
 static unsigned int dbs_enable;	/* number of CPUs using this policy */
@@ -84,28 +86,33 @@ static DEFINE_MUTEX(dbs_mutex);
 static struct workqueue_struct	*kondemand_wq;
 
 static struct dbs_tuners {
-	unsigned int sampling_rate;
-	unsigned int up_threshold;
+	unsigned int sampling_rate;	/* cpu工作队列运行超时时间 */
+	unsigned int up_threshold;	/* cpu负载阀值 */
 	unsigned int ignore_nice;
-	unsigned int powersave_bias;
+	unsigned int powersave_bias;	/* <此值当设置1时，当cpu满载运行时，就会一直运行于高频率上> */
 } dbs_tuners_ins = {
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
 	.ignore_nice = 0,
 	.powersave_bias = 0,
 };
-
+/**ltl
+ * 功能: 获取cpu空闲时间
+ * 参数:
+ * 返回值:
+ * 说明: 从开机启动时刻到当前时刻的时间统计
+ */
 static inline cputime64_t get_cpu_idle_time(unsigned int cpu)
 {
 	cputime64_t idle_time;
 	cputime64_t cur_jiffies;
 	cputime64_t busy_time;
 
-	cur_jiffies = jiffies64_to_cputime64(get_jiffies_64());
-	busy_time = cputime64_add(kstat_cpu(cpu).cpustat.user,
+	cur_jiffies = jiffies64_to_cputime64(get_jiffies_64()); /* 当前时刻 */
+	busy_time = cputime64_add(kstat_cpu(cpu).cpustat.user, /* user和system花费时间 */
 			kstat_cpu(cpu).cpustat.system);
 
-	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.irq);
-	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.softirq);
+	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.irq); /* 加上中断时间 */
+	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.softirq); /* 加上软中断 */
 	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.steal);
 
 	if (!dbs_tuners_ins.ignore_nice) {
@@ -113,7 +120,7 @@ static inline cputime64_t get_cpu_idle_time(unsigned int cpu)
 				kstat_cpu(cpu).cpustat.nice);
 	}
 
-	idle_time = cputime64_sub(cur_jiffies, busy_time);
+	idle_time = cputime64_sub(cur_jiffies, busy_time); /* 空闲时间=当前时刻 - cpu运行时间 */
 	return idle_time;
 }
 
@@ -211,6 +218,7 @@ show_one(up_threshold, up_threshold);
 show_one(ignore_nice_load, ignore_nice);
 show_one(powersave_bias, powersave_bias);
 
+/* 文件/sys/devices/system/cpu/cpu1/cpufreq/ondemand/sampling_rate的写函数 */
 static ssize_t store_sampling_rate(struct cpufreq_policy *unused,
 		const char *buf, size_t count)
 {
@@ -230,7 +238,7 @@ static ssize_t store_sampling_rate(struct cpufreq_policy *unused,
 
 	return count;
 }
-
+/* 文件/sys/devices/system/cpu/cpu1/cpufreq/ondemand/up_threshold的写函数 */
 static ssize_t store_up_threshold(struct cpufreq_policy *unused,
 		const char *buf, size_t count)
 {
@@ -284,7 +292,7 @@ static ssize_t store_ignore_nice_load(struct cpufreq_policy *policy,
 
 	return count;
 }
-
+/* /sys/devices/system/cpu/cpu1/cpufreq/ondemand/powersave_bias的处理函数 */
 static ssize_t store_powersave_bias(struct cpufreq_policy *unused,
 		const char *buf, size_t count)
 {
@@ -333,6 +341,12 @@ static struct attribute_group dbs_attr_group = {
 /************************** sysfs end ************************/
 
 #ifndef CONFIG_XEN
+/**ltl
+ * 功能: 计算cpu负债 
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int dbs_calc_load(struct cpu_dbs_info_s *this_dbs_info)
 {
 	struct cpufreq_policy *policy;
@@ -345,7 +359,7 @@ static int dbs_calc_load(struct cpu_dbs_info_s *this_dbs_info)
 	policy = this_dbs_info->cur_policy;
 	cur_jiffies = jiffies64_to_cputime64(get_jiffies_64());
 	total_ticks = (unsigned int) cputime64_sub(cur_jiffies,
-			this_dbs_info->prev_cpu_wall);
+			this_dbs_info->prev_cpu_wall); /* 从开机到此刻的总tick */
 	this_dbs_info->prev_cpu_wall = get_jiffies_64();
 
 	if (!total_ticks)
@@ -370,13 +384,13 @@ static int dbs_calc_load(struct cpu_dbs_info_s *this_dbs_info)
 		struct cpu_dbs_info_s *j_dbs_info;
 
 		j_dbs_info = &per_cpu(cpu_dbs_info, j);
-		total_idle_ticks = get_cpu_idle_time(j);
+		total_idle_ticks = get_cpu_idle_time(j); /* 从开机启动起，此cpu总空闲时间  */
 		tmp_idle_ticks = (unsigned int) cputime64_sub(total_idle_ticks,
-				j_dbs_info->prev_cpu_idle);
-		j_dbs_info->prev_cpu_idle = total_idle_ticks;
+				j_dbs_info->prev_cpu_idle); /* 最近一次空闲的空闲时间 */
+		j_dbs_info->prev_cpu_idle = total_idle_ticks; 
 
 		if (tmp_idle_ticks < idle_ticks)
-			idle_ticks = tmp_idle_ticks;
+			idle_ticks = tmp_idle_ticks; /* 此次的idle时间 */
 	}
 	load = (100 * (total_ticks - idle_ticks)) / total_ticks;
 	return load;
@@ -442,7 +456,12 @@ static int dbs_calc_load(struct cpu_dbs_info_s *this_dbs_info)
 	return load;
 }
 #endif
-
+/**ltl
+ * 功能: 根据cpu的负载来设置cpu的频率，当负载高于80时，设置CPU最高频率，如果低于80，则向下设置频率
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 {
 	int load=0;
@@ -453,17 +472,17 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		return;
 
 	policy = this_dbs_info->cur_policy;
-	load = dbs_calc_load(this_dbs_info);
+	load = dbs_calc_load(this_dbs_info); /* 计算cpu的负载 */
 	if (load > 100) 
 		return;
-
+	/* cpu负载高干80，则把cpu频率设置成最高 */
 	/* Check for frequency increase */
-	if (load > dbs_tuners_ins.up_threshold) {
+	if (load > dbs_tuners_ins.up_threshold/*80*/) {
 		/* if we are already at full speed then break out early */
 		if (!dbs_tuners_ins.powersave_bias) {
 			if (policy->cur == policy->max)
 				return;
-
+			/* 把cpu的运行频率设置成最大 */
 			__cpufreq_driver_target(policy, policy->max,
 				CPUFREQ_RELATION_H);
 		} else {
@@ -475,7 +494,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 		return;
 	}
-
+	/* cpu负载低于80的情况 */
 	/* Check for frequency decrease */
 	/* if we cannot reduce the frequency anymore, break out early */
 	if (policy->cur == policy->min)
@@ -492,10 +511,10 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		freq_cur = __cpufreq_driver_getavg(policy);
 		if (!freq_cur)
 			freq_cur = policy->cur;
-
+		/* 下一频率 */
 		freq_next = (freq_cur * load) /
 			(dbs_tuners_ins.up_threshold - 10);
-
+		/* 设置cpu的频率 */
 		if (!dbs_tuners_ins.powersave_bias) {
 			__cpufreq_driver_target(policy, freq_next,
 					CPUFREQ_RELATION_L);
@@ -507,7 +526,9 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		}
 	}
 }
-
+/**ltl
+ * 功能: cpu采用任务处理函数
+ */
 static void do_dbs_timer(void *data)
 {
 	unsigned int cpu = smp_processor_id();
@@ -530,7 +551,7 @@ static void do_dbs_timer(void *data)
 	if (!dbs_tuners_ins.powersave_bias ||
 	    (unsigned long) data == DBS_NORMAL_SAMPLE) {
 		lock_cpu_hotplug();
-		dbs_check_cpu(dbs_info);
+		dbs_check_cpu(dbs_info);	/* 根据CPU负载去设置cpu的频率 */
 		unlock_cpu_hotplug();
 		if (dbs_info->freq_lo) {
 			/* Setup timer for SUB_SAMPLE */
@@ -538,15 +559,16 @@ static void do_dbs_timer(void *data)
 					(void *)DBS_SUB_SAMPLE);
 			delay = dbs_info->freq_hi_jiffies;
 		}
-	} else {
+	} else { /* 只有第一次和设置freq_lo才会执行此分支 */
 		__cpufreq_driver_target(dbs_info->cur_policy,
 	                        	dbs_info->freq_lo,
 	                        	CPUFREQ_RELATION_H);
 	}
+	/* 重新开启工作队列 */
 	queue_delayed_work_on(cpu, kondemand_wq, &dbs_info->work, delay);
 	unlock_policy_rwsem_write(cpu);
 }
-
+/* 开启工作队列 */
 static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info)
 {
 	/* We want all CPUs to do sampling nearly on same jiffy */
@@ -556,9 +578,9 @@ static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info)
 	dbs_info->enable = 1;
 	ondemand_powersave_bias_init();
 	dbs_info->sample_type = DBS_NORMAL_SAMPLE;
-	INIT_WORK(&dbs_info->work, do_dbs_timer, dbs_info);
+	INIT_WORK(&dbs_info->work, do_dbs_timer, dbs_info);	/* 初始化任务 */
 	queue_delayed_work_on(dbs_info->cpu, kondemand_wq, &dbs_info->work,
-	                      delay);
+	                      delay); /* 开启任务 */
 }
 
 static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info)
@@ -566,7 +588,12 @@ static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info)
 	dbs_info->enable = 0;
 	cancel_delayed_work(&dbs_info->work);
 }
-
+/**ltl
+ * 功能: ondemand调节器的处理函数
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
 {
@@ -578,7 +605,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	this_dbs_info = &per_cpu(cpu_dbs_info, cpu);
 
 	switch (event) {
-	case CPUFREQ_GOV_START:
+	case CPUFREQ_GOV_START: /* 调节器开启 */
 		if ((!cpu_online(cpu)) || (!policy->cur))
 			return -EINVAL;
 
@@ -587,7 +614,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 		mutex_lock(&dbs_mutex);
 		dbs_enable++;
-
+		/* 创建目录/sys/devices/system/cpu/cpu1/cpufreq/ondemand及目录下的文件 */
 		rc = sysfs_create_group(&policy->kobj, &dbs_attr_group);
 		if (rc) {
 			dbs_enable--;
@@ -621,14 +648,14 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 			if (def_sampling_rate < MIN_STAT_SAMPLING_RATE)
 				def_sampling_rate = MIN_STAT_SAMPLING_RATE;
 
-			dbs_tuners_ins.sampling_rate = def_sampling_rate;
+			dbs_tuners_ins.sampling_rate = def_sampling_rate;	/* cpu工作队列运行超时时间  */
 		}
-		dbs_timer_init(this_dbs_info);
+		dbs_timer_init(this_dbs_info);	/* 开启采样工作队列 */
 
 		mutex_unlock(&dbs_mutex);
 		break;
 
-	case CPUFREQ_GOV_STOP:
+	case CPUFREQ_GOV_STOP:	/* 调节器停止 */
 		mutex_lock(&dbs_mutex);
 		dbs_timer_exit(this_dbs_info);
 		sysfs_remove_group(&policy->kobj, &dbs_attr_group);
@@ -637,7 +664,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 		break;
 
-	case CPUFREQ_GOV_LIMITS:
+	case CPUFREQ_GOV_LIMITS:	/* 调节器限制 */
 		mutex_lock(&dbs_mutex);
 		if (policy->max < this_dbs_info->cur_policy->cur)
 			__cpufreq_driver_target(this_dbs_info->cur_policy,
@@ -652,7 +679,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	}
 	return 0;
 }
-
+/* ondemand调节器对象 */
 struct cpufreq_governor cpufreq_gov_ondemand = {
 	.name			= "ondemand",
 	.governor		= cpufreq_governor_dbs,

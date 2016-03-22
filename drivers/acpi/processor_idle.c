@@ -469,7 +469,7 @@ static void acpi_processor_idle_bm(void)
 		local_irq_enable();
 		return;
 	}
-
+	/* the current C state */
 	cx = pr->power.state;
 	if (!cx) {
 		acpi_safe_halt();
@@ -688,14 +688,10 @@ static void acpi_processor_idle_bm(void)
 		if (sleep_ticks > cx->promotion.threshold.ticks) {
 			cx->promotion.count++;
 			cx->demotion.count = 0;
-			if (cx->promotion.count >=
-			    cx->promotion.threshold.count) {
+			if (cx->promotion.count >= cx->promotion.threshold.count/*10/4*/) {
 				if (pr->flags.bm_check) {
-					if (!
-					    (pr->power.bm_activity & cx->
-					     promotion.threshold.bm)) {
-						next_state =
-						    cx->promotion.state;
+					if (!(pr->power.bm_activity & cx->promotion.threshold.bm)) {
+						next_state = cx->promotion.state;
 						goto end;
 					}
 				} else {
@@ -719,7 +715,7 @@ static void acpi_processor_idle_bm(void)
 		if (sleep_ticks < cx->demotion.threshold.ticks) {
 			cx->demotion.count++;
 			cx->promotion.count = 0;
-			if (cx->demotion.count >= cx->demotion.threshold.count) {
+			if (cx->demotion.count >= cx->demotion.threshold.count/*2*/) {
 				next_state = cx->demotion.state;
 				goto end;
 			}
@@ -748,7 +744,12 @@ static void acpi_processor_idle_bm(void)
 		acpi_processor_power_activate(pr, next_state);
 }
 static void (*acpi_processor_idle)(void) = acpi_processor_idle_bm;
-
+/**ltl
+ * 功能: 设置当前CState,最底CState,最高CState
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int acpi_processor_set_power_policy(struct acpi_processor *pr)
 {
 	unsigned int i;
@@ -777,14 +778,14 @@ static int acpi_processor_set_power_policy(struct acpi_processor *pr)
 			continue;
 
 		if (!state_is_set)
-			pr->power.state = cx;
+			pr->power.state = cx; /* the current state */
 		state_is_set++;
 		break;
 	}
 
 	if (!state_is_set)
 		return -ENODEV;
-
+	/* 设置上一级别 */
 	/* demotion */
 	for (i = 1; i < ACPI_PROCESSOR_MAX_POWER; i++) {
 		cx = &pr->power.states[i];
@@ -801,7 +802,7 @@ static int acpi_processor_set_power_policy(struct acpi_processor *pr)
 
 		lower = cx;
 	}
-
+	/* 设置下一级别 */
 	/* promotion */
 	for (i = (ACPI_PROCESSOR_MAX_POWER - 1); i > 0; i--) {
 		cx = &pr->power.states[i];
@@ -824,7 +825,12 @@ static int acpi_processor_set_power_policy(struct acpi_processor *pr)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 当缺少_CST对象，则使用PBLK寄存器
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int acpi_processor_get_power_info_fadt(struct acpi_processor *pr)
 {
 
@@ -862,7 +868,12 @@ static int acpi_processor_get_power_info_fadt(struct acpi_processor *pr)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 将C0, C1两状态设置成有效
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int acpi_processor_get_power_info_default_c1(struct acpi_processor *pr)
 {
 
@@ -870,16 +881,29 @@ static int acpi_processor_get_power_info_default_c1(struct acpi_processor *pr)
 	memset(pr->power.states, 0, sizeof(pr->power.states));
 
 	/* set the first C-State to C1 */
-	pr->power.states[ACPI_STATE_C1].type = ACPI_STATE_C1;
+	pr->power.states[ACPI_STATE_C1].type = ACPI_STATE_C1;	/* set C1 states */
 
 	/* the C0 state only exists as a filler in our array,
 	 * and all processors need to support C1 */
-	pr->power.states[ACPI_STATE_C0].valid = 1;
-	pr->power.states[ACPI_STATE_C1].valid = 1;
+	pr->power.states[ACPI_STATE_C0].valid = 1; /* set C0 state valid */
+	pr->power.states[ACPI_STATE_C1].valid = 1; /* set C1 state valid */
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 读取_CST对象
+ * 参数:
+ * 返回值:
+ * 说明: 主要是读取_CST对象信息
+ *		_CST: (C states) 此对象包括此CPU的状态C2,C3(C0,C1是每个CPU必须支持的，无须从ASL读取)
+ *			 读取的返回值分别: count->the number of C state for this cpu support.
+ *						    cstate[count]->C state array, the entry include for number:
+ *										register-> resource descriptor
+ *										type	   -> 1=C1,2=C2,3=C3,etc...
+ *										latency -> the worest-case latency to enter and exit the C state(in ms)
+ *										power   -> the average power consumption of the processor when in the corresponding C State.
+ 
+ */
 static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 {
 	acpi_status status = 0;
@@ -907,14 +931,14 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 	}
 
 	cst = (union acpi_object *)buffer.pointer;
-
+	/* 至少两个状态 */
 	/* There must be at least 2 elements */
 	if (!cst || (cst->type != ACPI_TYPE_PACKAGE) || cst->package.count < 2) {
 		printk(KERN_ERR PREFIX "not enough elements in _CST\n");
 		status = -EFAULT;
 		goto end;
 	}
-
+	/* 状态个数 */
 	count = cst->package.elements[0].integer.value;
 
 	/* Validate number of power states. */
@@ -925,8 +949,8 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 	}
 
 	/* Tell driver that at least _CST is supported. */
-	pr->flags.has_cst = 1;
-
+	pr->flags.has_cst = 1; /* this prrocessor support _CST object */
+	/* parese the C state */
 	for (i = 1; i <= count; i++) {
 		union acpi_object *element;
 		union acpi_object *obj;
@@ -952,7 +976,7 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 		if (reg->space_id != ACPI_ADR_SPACE_SYSTEM_IO &&
 		    (reg->space_id != ACPI_ADR_SPACE_FIXED_HARDWARE))
 			continue;
-
+		/* if space_id is Hardware type, meaning change the state must archtechure instruction */
 		cx.address = (reg->space_id == ACPI_ADR_SPACE_FIXED_HARDWARE) ?
 		    0 : reg->address;
 
@@ -960,7 +984,7 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 		obj = (union acpi_object *)&(element->package.elements[1]);
 		if (obj->type != ACPI_TYPE_INTEGER)
 			continue;
-
+		/* C state,1=C1,2=C2,3=C3 etc... */
 		cx.type = obj->integer.value;
 
 		if ((cx.type != ACPI_STATE_C1) &&
@@ -973,13 +997,13 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 		obj = (union acpi_object *)&(element->package.elements[2]);
 		if (obj->type != ACPI_TYPE_INTEGER)
 			continue;
-
+		/* the worst-case latency */
 		cx.latency = obj->integer.value;
 
 		obj = (union acpi_object *)&(element->package.elements[3]);
 		if (obj->type != ACPI_TYPE_INTEGER)
 			continue;
-
+		/* the power consumption */
 		cx.power = obj->integer.value;
 
 		current_count++;
@@ -1011,7 +1035,12 @@ static int acpi_processor_get_power_info_cst(struct acpi_processor *pr)
 
 	return status;
 }
-
+/**ltl
+ * 功能: 校验C2状态
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void acpi_processor_power_verify_c2(struct acpi_processor_cx *cx)
 {
 
@@ -1037,7 +1066,12 @@ static void acpi_processor_power_verify_c2(struct acpi_processor_cx *cx)
 
 	return;
 }
-
+/**ltl
+ * 功能: 校验C3状态
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void acpi_processor_power_verify_c3(struct acpi_processor *pr,
 					   struct acpi_processor_cx *cx)
 {
@@ -1052,7 +1086,7 @@ static void acpi_processor_power_verify_c3(struct acpi_processor *pr,
 	 * C3 latency must be less than or equal to 1000
 	 * microseconds.
 	 */
-	else if (cx->latency > ACPI_PROCESSOR_MAX_C3_LATENCY) {
+	else if (cx->latency > ACPI_PROCESSOR_MAX_C3_LATENCY) { /* 超出规定的延迟时间 */
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 				  "latency too large [%d]\n", cx->latency));
 		return;
@@ -1121,7 +1155,12 @@ static void acpi_processor_power_verify_c3(struct acpi_processor *pr,
 
 	return;
 }
-
+/**ltl
+ * 功能: 验证C1,C2,C3状态是否有效果
+ * 参数:
+ * 返回值:
+ * 说明: 当CPU处理C2,C3状态下，要禁用local apic
+ */
 static int acpi_processor_power_verify(struct acpi_processor *pr)
 {
 	unsigned int i;
@@ -1130,8 +1169,10 @@ static int acpi_processor_power_verify(struct acpi_processor *pr)
 #ifdef ARCH_APICTIMER_STOPS_ON_C3
 	int timer_broadcast = 0;
 	cpumask_t mask = cpumask_of_cpu(pr->id);
-	on_each_cpu(switch_ipi_to_APIC_timer, &mask, 1, 1);
+	/* 将所有的CPU开启Local APIC中断 */
+	on_each_cpu(switch_ipi_to_APIC_timer, &mask, 1, 1); 
 #endif
+	/* 设置bm_check变量 */
 	acpi_processor_power_init_bm_check(&(pr->flags), pr->id);
 	if (pr->flags.bm_check && !pr->flags.bm_control)
 		acpi_processor_idle = acpi_processor_idle_simple;
@@ -1141,10 +1182,10 @@ static int acpi_processor_power_verify(struct acpi_processor *pr)
 
 		switch (cx->type) {
 		case ACPI_STATE_C1:
-			cx->valid = 1;
+			cx->valid = 1; /* 标记C1状态有效 */
 			break;
 
-		case ACPI_STATE_C2:
+		case ACPI_STATE_C2: /* 校验C2状态有效 */
 			acpi_processor_power_verify_c2(cx);
 #ifdef ARCH_APICTIMER_STOPS_ON_C3
 			if (cx->valid)
@@ -1152,7 +1193,7 @@ static int acpi_processor_power_verify(struct acpi_processor *pr)
 #endif
 			break;
 
-		case ACPI_STATE_C3:
+		case ACPI_STATE_C3:/* 校验C3状态有效 */
 			acpi_processor_power_verify_c3(pr, cx);
 #ifdef ARCH_APICTIMER_STOPS_ON_C3
 			if (cx->valid)
@@ -1166,13 +1207,25 @@ static int acpi_processor_power_verify(struct acpi_processor *pr)
 	}
 
 #ifdef ARCH_APICTIMER_STOPS_ON_C3
-	if (timer_broadcast)
+	if (timer_broadcast)/* 将所有的CPU禁用Local APIC中断 */
 		on_each_cpu(switch_APIC_timer_to_ipi, &mask, 1, 1);
 #endif
 
 	return (working);
 }
-
+/**ltl
+ * 功能: 获取power信息
+ * 参数:
+ * 返回值:
+ * 说明: 主要是读取_CST对象信息
+ *		_CST: (C states) 此对象包括此CPU的状态C2,C3(C0,C1是每个CPU必须支持的，无须从ASL读取)
+ *			 读取的返回值分别: count->the number of C state for this cpu support.
+ *						    cstate[count]->C state array, the entry include for number:
+ *										register-> resource descriptor
+ *										type	   -> 1=C1,2=C2,3=C3,etc...
+ *										latency -> the worest-case latency to enter and exit the C state(in ms)
+ *										power   -> the average power consumption of the processor when in the corresponding C State.
+ */
 static int acpi_processor_get_power_info(struct acpi_processor *pr)
 {
 	unsigned int i;
@@ -1183,11 +1236,11 @@ static int acpi_processor_get_power_info(struct acpi_processor *pr)
 	 * this function */
 
 	/* Adding C1 state */
-	acpi_processor_get_power_info_default_c1(pr);
-	result = acpi_processor_get_power_info_cst(pr);
-	if (result == -ENODEV)
+	acpi_processor_get_power_info_default_c1(pr); /* 设置C0,C1状态*/
+	result = acpi_processor_get_power_info_cst(pr); /* get C2,C3 state ,etc.. */
+	if (result == -ENODEV)	/* 若_CST无效，则从PBLK寄存器中获取地址 */
 		acpi_processor_get_power_info_fadt(pr);
-
+	/* 效验C state是否有效, 同时禁用local apic */
 	pr->power.count = acpi_processor_power_verify(pr);
 
 	/*
@@ -1198,7 +1251,7 @@ static int acpi_processor_get_power_info(struct acpi_processor *pr)
 	 * (e.g. encourage deeper sleeps to conserve battery life when
 	 * not on AC).
 	 */
-	result = acpi_processor_set_power_policy(pr);
+	result = acpi_processor_set_power_policy(pr); /* 设置当前CState,最底CState,最高CState */
 	if (result)
 		return result;
 
@@ -1210,13 +1263,18 @@ static int acpi_processor_get_power_info(struct acpi_processor *pr)
 		if (pr->power.states[i].valid) {
 			pr->power.count = i;
 			if (pr->power.states[i].type >= ACPI_STATE_C2)
-				pr->flags.power = 1;
+				pr->flags.power = 1; /* 支持C2,或者C3 */
 		}
 	}
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 当从APCI底层接收到0x81通知信息时，则调用此函数
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int acpi_processor_cst_has_changed(struct acpi_processor *pr)
 {
 	int result = 0;
@@ -1354,7 +1412,7 @@ int acpi_processor_power_init(struct acpi_processor *pr,
 					"Notifying BIOS of _CST ability failed"));
 		}
 	}
-
+	/* 获取CState */
 	acpi_processor_get_power_info(pr);
 
 	/*
@@ -1370,7 +1428,7 @@ int acpi_processor_power_init(struct acpi_processor *pr,
 				       pr->power.states[i].type);
 		printk(")\n");
 
-		if (pr->id == 0) {
+		if (pr->id == 0) { /* cpu id is 0 */
 			pm_idle_save = pm_idle;
 			pm_idle = acpi_processor_idle;
 		}

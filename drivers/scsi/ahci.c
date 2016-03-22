@@ -225,7 +225,7 @@ static struct scsi_host_template ahci_sht = {
 	.module			= THIS_MODULE,
 	.name			= DRV_NAME,
 	.ioctl			= ata_scsi_ioctl,
-	.queuecommand		= ata_scsi_queuecmd,//执行SCSI命令接口
+	.queuecommand		= ata_scsi_queuecmd,/* 执行SCSI命令接口 */
 	.change_queue_depth	= ata_scsi_change_queue_depth,
 	.can_queue		= AHCI_MAX_CMDS - 1,
 	.this_id		= ATA_SHT_THIS_ID,
@@ -235,7 +235,7 @@ static struct scsi_host_template ahci_sht = {
 	.use_clustering		= AHCI_USE_CLUSTERING,
 	.proc_name		= DRV_NAME,
 	.dma_boundary		= AHCI_DMA_BOUNDARY,
-	.slave_configure	= ata_scsi_slave_config,//call by scsi_add_lun function
+	.slave_configure	= ata_scsi_slave_config,/* call by scsi_add_lun function */
 	.slave_destroy		= ata_scsi_slave_destroy,
 	.bios_param		= ata_std_bios_param,
 };
@@ -325,11 +325,11 @@ static const struct pci_device_id ahci_pci_tbl[] = {
 	{ PCI_VENDOR_ID_INTEL, 0x282a, PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 	  board_ahci }, /* ICH8M */
 	  
-	//保福寺
+	/* 保福寺 */
 	{ PCI_VENDOR_ID_INTEL, 0x1D02, PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 	  board_ahci },
 
-	//出过问题的机器(192.168.7.20)
+	/* 出过问题的机器(192.168.7.20) */
 	{ PCI_VENDOR_ID_INTEL, 0x3b22, PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 	  board_ahci },
 	
@@ -368,7 +368,9 @@ static const struct pci_device_id ahci_pci_tbl[] = {
 	{ }	/* terminate list */
 };
 
-
+/**ltl
+ * AHCI控制器对象
+ */
 static struct pci_driver ahci_pci_driver = {
 	.name			= DRV_NAME,
 	.id_table		= ahci_pci_tbl,
@@ -1195,11 +1197,11 @@ static void ahci_setup_port(struct ata_ioports *port, unsigned long base,unsigne
 	VPRINTK("EXIT\n");
 }
 /**ltl
-功能:初始化AHCI控制器相关的寄存器
-参数:
-返回值:
-说明:
-*/
+ * 功能:初始化AHCI控制器相关的寄存器
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int ahci_host_init(struct ata_probe_ent *probe_ent)
 {
 	struct ahci_host_priv *hpriv = probe_ent->private_data;
@@ -1211,12 +1213,12 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 	void __iomem *port_mmio;
 
 	cap_save = readl(mmio + HOST_CAP);
-	cap_save &= ( (1<<28) | (1<<17) );//supports Mechanical Presence Switch and supports port multiplier
-	cap_save |= (1 << 27);//supports staggered spin-up
+	cap_save &= ( (1<<28) | (1<<17) );/* supports Mechanical Presence Switch and supports port multiplier */
+	cap_save |= (1 << 27);/* supports staggered spin-up */
 
 	/* global controller reset */
 	tmp = readl(mmio + HOST_CTL);
-	if ((tmp & HOST_RESET) == 0) {//重置控制器,重启完后，此位会置0
+	if ((tmp & HOST_RESET) == 0) {/* 重置控制器,重启完后，此位会置0 */
 		writel(tmp | HOST_RESET, mmio + HOST_CTL);
 		readl(mmio + HOST_CTL); /* flush */
 	}
@@ -1227,18 +1229,18 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 	ssleep(1);
 
 	tmp = readl(mmio + HOST_CTL);
-	if (tmp & HOST_RESET) {//重置不成功，则返回
+	if (tmp & HOST_RESET) {/* 重置不成功，则返回 */
 		dev_printk(KERN_ERR, &pdev->dev,
 			   "controller reset failed (0x%x)\n", tmp);
 		return -EIO;
 	}
 
-	writel(HOST_AHCI_EN, mmio + HOST_CTL);//使能AHCI设备
+	writel(HOST_AHCI_EN, mmio + HOST_CTL);/* 使能AHCI设备 */
 	(void) readl(mmio + HOST_CTL);	/* flush */
-	writel(cap_save, mmio + HOST_CAP);//设置AHCI接口支持的功能
+	writel(cap_save, mmio + HOST_CAP);/* 设置AHCI接口支持的功能 */
 	writel(0xf, mmio + HOST_PORTS_IMPL);
 	(void) readl(mmio + HOST_PORTS_IMPL);	/* flush */
-	//原因??
+	/* 原因?? */
 	if (pdev->vendor == PCI_VENDOR_ID_INTEL) 
 	{
 		u16 tmp16;
@@ -1247,22 +1249,22 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 		tmp16 |= 0xf;
 		pci_write_config_word(pdev, 0x92, tmp16);
 	}
-	//读取AHCI功能寄存器
+	/* 读取AHCI功能寄存器 */
 	hpriv->cap = readl(mmio + HOST_CAP);
-	//获取AHCI可以使用的端口数(端口不一定连有设备)
+	/* 获取AHCI可以使用的端口数(端口不一定连有设备) */
 	hpriv->port_map = readl(mmio + HOST_PORTS_IMPL);
 	probe_ent->n_ports = (hpriv->cap & 0x1f) + 1;
 
 	VPRINTK("cap 0x%x  port_map 0x%x  n_ports %d\n",
 		hpriv->cap, hpriv->port_map, probe_ent->n_ports);
 
-	//AHCI是否支持64位，则要设置DMA mask
+	/* AHCI是否支持64位，则要设置DMA mask */
 	using_dac = hpriv->cap & HOST_CAP_64;
 	if (using_dac && !pci_set_dma_mask(pdev, DMA_64BIT_MASK)) 
-	{//设置dma_mask为64位
-		rc = pci_set_consistent_dma_mask(pdev, DMA_64BIT_MASK);//设置coherent_dma_mask为64位
+	{/* 设置dma_mask为64位 */
+		rc = pci_set_consistent_dma_mask(pdev, DMA_64BIT_MASK);/* 设置coherent_dma_mask为64位 */
 		if (rc) {
-			rc = pci_set_consistent_dma_mask(pdev, DMA_32BIT_MASK);//设置coherent_dma_mask为32位
+			rc = pci_set_consistent_dma_mask(pdev, DMA_32BIT_MASK);/* 设置coherent_dma_mask为32位 */
 			if (rc) {
 				dev_printk(KERN_ERR, &pdev->dev,
 					   "64-bit DMA enable failed\n");
@@ -1271,14 +1273,14 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 		}
 	} 
 	else 
-	{//设置dma_mask为32位
+	{/* 设置dma_mask为32位 */
 		rc = pci_set_dma_mask(pdev, DMA_32BIT_MASK);
 		if (rc) 
 		{
 			dev_printk(KERN_ERR, &pdev->dev,
 				   "32-bit DMA enable failed\n");
 			return rc;
-		}//设置coherent_dma_mask为32位。
+		}/* 设置coherent_dma_mask为32位。 */
 		rc = pci_set_consistent_dma_mask(pdev, DMA_32BIT_MASK);
 		if (rc) 
 		{
@@ -1293,18 +1295,18 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 		if (!(hpriv->port_map & (1 << i)))
 			continue;
 #endif
-		// 获取端口的内存空间的首地址，注:每个端口的内存空间大小为0x80
+		/* 获取端口的内存空间的首地址，注:每个端口的内存空间大小为0x80 */
 		port_mmio = ahci_port_base(mmio, i);
 		VPRINTK("mmio %p  port_mmio %p\n", mmio, port_mmio);
 
 		ahci_setup_port(&probe_ent->port[i],(unsigned long) mmio, i);
 
 		/* make sure port is not active */
-		tmp = readl(port_mmio + PORT_CMD);//端口的命令寄存器
+		tmp = readl(port_mmio + PORT_CMD);/* 端口的命令寄存器 */
 		VPRINTK("PORT_CMD 0x%x\n", tmp);
 		if (tmp & (PORT_CMD_LIST_ON | PORT_CMD_FIS_ON |
 			   PORT_CMD_FIS_RX | PORT_CMD_START)) {
-			   //使端口不工作
+			   /* 使端口不工作 */
 			tmp &= ~(PORT_CMD_LIST_ON | PORT_CMD_FIS_ON |
 				 PORT_CMD_FIS_RX | PORT_CMD_START);
 			writel(tmp, port_mmio + PORT_CMD);
@@ -1316,12 +1318,12 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 			msleep(500);
 		}
 
-		writel(PORT_CMD_SPIN_UP, port_mmio + PORT_CMD);//开启"交错启动"功能
+		writel(PORT_CMD_SPIN_UP, port_mmio + PORT_CMD);/* 开启"交错启动"功能 */
 
 		j = 0;
 		while (j < 100) {
 			msleep(10);
-			tmp = readl(port_mmio + PORT_SCR_STAT);//已经检测到设备并且设备与AHCI接口建立了连接
+			tmp = readl(port_mmio + PORT_SCR_STAT);/* 已经检测到设备并且设备与AHCI接口建立了连接 */
 			if ((tmp & 0xf) == 0x3)
 				break;
 			j++;
@@ -1332,22 +1334,22 @@ static int ahci_host_init(struct ata_probe_ent *probe_ent)
 		writel(tmp, port_mmio + PORT_SCR_ERR);
 		/*清空所有的中断事件*/
 		/* ack any pending irq events for this port */
-		tmp = readl(port_mmio + PORT_IRQ_STAT);//端口中断状态
+		tmp = readl(port_mmio + PORT_IRQ_STAT);/* 端口中断状态 */
 		VPRINTK("PORT_IRQ_STAT 0x%x\n", tmp);
 		if (tmp)
 			writel(tmp, port_mmio + PORT_IRQ_STAT);
-		//设置端口号到中断状态寄存器，每一位对应一个端口。
-		//在中断处理函数里，当产生中断时，读取这个寄存器，就可以判定是哪个端口产生中断。
+		/* 设置端口号到中断状态寄存器，每一位对应一个端口。
+		在中断处理函数里，当产生中断时，读取这个寄存器，就可以判定是哪个端口产生中断。*/
 		writel(1 << i, mmio + HOST_IRQ_STAT);
 	}
 
 	tmp = readl(mmio + HOST_CTL);
 	VPRINTK("HOST_CTL 0x%x\n", tmp);
-	writel(tmp | HOST_IRQ_EN, mmio + HOST_CTL);//在全局寄存器上使能中断
+	writel(tmp | HOST_IRQ_EN, mmio + HOST_CTL);/* 在全局寄存器上使能中断 */
 	tmp = readl(mmio + HOST_CTL);
 	VPRINTK("HOST_CTL 0x%x\n", tmp);
 
-	pci_set_master(pdev);//设置主设备(而非从设备)
+	pci_set_master(pdev);/* 设置主设备(而非从设备) */
 
 	return 0;
 }
@@ -1495,8 +1497,8 @@ static int ahci_init_one (struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	probe_ent->sht		= ahci_port_info[board_idx].sht;
 	probe_ent->host_flags	= ahci_port_info[board_idx].host_flags;
-	probe_ent->pio_mask	= ahci_port_info[board_idx].pio_mask;//传输模式
-	probe_ent->udma_mask	= ahci_port_info[board_idx].udma_mask;//传输模式
+	probe_ent->pio_mask	= ahci_port_info[board_idx].pio_mask;/*传输模式*/
+	probe_ent->udma_mask	= ahci_port_info[board_idx].udma_mask;/*传输模式*/
 	probe_ent->port_ops	= ahci_port_info[board_idx].port_ops;
 
     probe_ent->irq = pdev->irq;
@@ -1506,7 +1508,7 @@ static int ahci_init_one (struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (have_msi)
 		hpriv->flags |= AHCI_FLAG_MSI;
-	//初始化AHCI的控制寄存器和端口寄存器
+	/* 初始化AHCI的控制寄存器和端口寄存器 */
 	/* initialize adapter */
 	rc = ahci_host_init(probe_ent);
 	if (rc)

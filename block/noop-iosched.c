@@ -6,7 +6,9 @@
 #include <linux/bio.h>
 #include <linux/module.h>
 #include <linux/init.h>
-
+/*
+ * 算法的基本思想: 对请求只合并，而不排序
+ */
 struct noop_data {
 	struct list_head queue;
 };

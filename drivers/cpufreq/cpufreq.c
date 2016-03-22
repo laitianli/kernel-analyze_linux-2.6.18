@@ -357,6 +357,14 @@ static struct cpufreq_governor *__find_governor(const char *str_governor)
 /**
  * cpufreq_parse_governor - parse a governor string
  */
+/**ltl
+ * 功能: 解析调节器
+ * 参数: str_governor	-> 调节器名字
+ *		policy		->[out] 调节器标识，值可为:CPUFREQ_POLICY_PERFORMANCE\CPUFREQ_POLICY_POWERSAVE\
+ *		governor		->[out] 调节器对象
+ * 返回值: 
+ * 说明: 
+ */
 static int cpufreq_parse_governor (char *str_governor, unsigned int *policy,
 				struct cpufreq_governor **governor)
 {
@@ -366,10 +374,10 @@ static int cpufreq_parse_governor (char *str_governor, unsigned int *policy,
 		goto out;
 
 	if (cpufreq_driver->setpolicy) {
-		if (!strnicmp(str_governor, "performance", CPUFREQ_NAME_LEN)) {
+		if (!strnicmp(str_governor, "performance", CPUFREQ_NAME_LEN)) { /* 性能最好的调节器 */
 			*policy = CPUFREQ_POLICY_PERFORMANCE;
 			err = 0;
-		} else if (!strnicmp(str_governor, "powersave", CPUFREQ_NAME_LEN)) {
+		} else if (!strnicmp(str_governor, "powersave", CPUFREQ_NAME_LEN)) { /* 最节能(性能最差)的调节器 */
 			*policy = CPUFREQ_POLICY_POWERSAVE;
 			err = 0;
 		}
@@ -378,7 +386,7 @@ static int cpufreq_parse_governor (char *str_governor, unsigned int *policy,
 
 		mutex_lock(&cpufreq_governor_mutex);
 
-		t = __find_governor(str_governor);
+		t = __find_governor(str_governor); /* 获取调节器对象 */
 
 		if (t == NULL) {
 			char *name = kasprintf(GFP_KERNEL, "cpufreq_%s", str_governor);
@@ -465,6 +473,7 @@ store_one(scaling_max_freq,max);
 /**
  * show_cpuinfo_cur_freq - current CPU frequency as detected by hardware
  */
+/* /sys/devices/system/cpu/cpu1/cpufreq/cpuinfo_cur_freq的读取函数 */
 static ssize_t show_cpuinfo_cur_freq (struct cpufreq_policy * policy, char *buf)
 {
 	unsigned int cur_freq = __cpufreq_get(policy->cpu);
@@ -476,6 +485,9 @@ static ssize_t show_cpuinfo_cur_freq (struct cpufreq_policy * policy, char *buf)
 
 /**
  * show_scaling_governor - show the current policy for the specified CPU
+ */
+/*
+ * /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor的读接口，值为: powersave\ performance\ ondemand\userspace
  */
 static ssize_t show_scaling_governor (struct cpufreq_policy * policy, char *buf)
 {
@@ -492,6 +504,14 @@ static ssize_t show_scaling_governor (struct cpufreq_policy * policy, char *buf)
 /**
  * store_scaling_governor - store policy for the specified CPU
  */
+/**ltl
+ * 功能: 给用户提供一个设置调节器的接口。
+ * 参数:
+ * 返回值:
+ * 说明: 此函数是文件/sys/devices/system/cpu/cpu1/cpufreq/scaling_governor的写接口，在脚本文件
+ *		/etc/rc.d/init.d/cpuspeed中存在一条语句:adjust_cpufreq scaling_governor ${governor}，
+ *		此处就是为cpu设备调节器。(一般governor的值为ondemand)
+ */
 static ssize_t store_scaling_governor (struct cpufreq_policy * policy,
 				       const char *buf, size_t count)
 {
@@ -502,11 +522,11 @@ static ssize_t store_scaling_governor (struct cpufreq_policy * policy,
 	ret = cpufreq_get_policy(&new_policy, policy->cpu);
 	if (ret)
 		return ret;
-
+	/* 解析调节器名字 */
 	ret = sscanf (buf, "%15s", str_governor);
 	if (ret != 1)
 		return -EINVAL;
-
+	/* 根据调节器名字获得调节器对象 */
 	if (cpufreq_parse_governor(str_governor, &new_policy.policy, &new_policy.governor))
 		return -EINVAL;
 
@@ -523,6 +543,12 @@ static ssize_t store_scaling_governor (struct cpufreq_policy * policy,
 /**
  * show_scaling_driver - show the cpufreq driver currently loaded
  */
+/**
+ * 功能: 获取调频策略驱动名
+ * 参数:
+ * 返回值:
+ * 说明: 此函数为文件/sys/devices/system/cpu/cpu1/cpufreq/scaling_driver的读接口，值: acpi-cpufreq
+ */
 static ssize_t show_scaling_driver (struct cpufreq_policy * policy, char *buf)
 {
 	return scnprintf(buf, CPUFREQ_NAME_LEN, "%s\n", cpufreq_driver->name);
@@ -530,6 +556,9 @@ static ssize_t show_scaling_driver (struct cpufreq_policy * policy, char *buf)
 
 /**
  * show_scaling_available_governors - show the available CPUfreq governors
+ */
+/* 为/sys/devices/system/cpu/cpu1/cpufreq/scaling_available_governors的读接口，
+ * 值为: ondemand userspace performance 
  */
 static ssize_t show_scaling_available_governors (struct cpufreq_policy * policy,
 				char *buf)
@@ -674,6 +703,12 @@ static struct kobj_type ktype_cpufreq = {
  *
  * Adds the cpufreq interface for a CPU device.
  */
+/**ltl
+ * 功能: 添加cpu设备
+ * 参数: 
+ * 返回值: 
+ * 说明: 
+ */
 static int cpufreq_add_dev (struct sys_device * sys_dev)
 {
 	unsigned int cpu = sys_dev->id;
@@ -709,14 +744,14 @@ static int cpufreq_add_dev (struct sys_device * sys_dev)
 		ret = -EINVAL;
 		goto module_out;
 	}
-
+	/* 分配cpu调频策略空间 */
 	policy = kzalloc(sizeof(struct cpufreq_policy), GFP_KERNEL);
 	if (!policy) {
 		ret = -ENOMEM;
 		goto nomem_out;
 	}
 
-	policy->cpu = cpu;
+	policy->cpu = cpu; /* cpu ID */
 	policy->cpus = cpumask_of_cpu(cpu);
 
 	/* Initially set CPU itself as the policy_cpu */
@@ -729,7 +764,7 @@ static int cpufreq_add_dev (struct sys_device * sys_dev)
 	/* call driver. From then on the cpufreq must be able
 	 * to accept all calls to ->verify and ->setpolicy for this CPU
 	 */
-	ret = cpufreq_driver->init(policy);
+	ret = cpufreq_driver->init(policy); /* 调用acpi_cpufreq_cpu_init初始化设备 */
 	if (ret) {
 		dprintk("initialization failed\n");
 		unlock_policy_rwsem_write(cpu);
@@ -787,18 +822,18 @@ static int cpufreq_add_dev (struct sys_device * sys_dev)
 	}
 	/* set up files for this cpu device */
 	drv_attr = cpufreq_driver->attr;
-	while ((drv_attr) && (*drv_attr)) {
+	while ((drv_attr) && (*drv_attr)) { /* 创建属性文件 */
 		sysfs_create_file(&policy->kobj, &((*drv_attr)->attr));
 		drv_attr++;
 	}
-	if (cpufreq_driver->get)
+	if (cpufreq_driver->get) /* 创建cpuinfo_cur_freq文件 */
 		sysfs_create_file(&policy->kobj, &cpuinfo_cur_freq.attr);
-	if (cpufreq_driver->target)
+	if (cpufreq_driver->target) /* 创建scaling_cur_freq文件 */
 		sysfs_create_file(&policy->kobj, &scaling_cur_freq.attr);
 
 	spin_lock_irqsave(&cpufreq_driver_lock, flags);
 	for_each_cpu_mask(j, policy->cpus) {
-		cpufreq_cpu_data[j] = policy;
+		cpufreq_cpu_data[j] = policy; /* 设置cpu调频策略对象 */
 		per_cpu(policy_cpu, j) = policy->cpu;
 	}
 	spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
@@ -822,7 +857,7 @@ static int cpufreq_add_dev (struct sys_device * sys_dev)
 	unlock_policy_rwsem_write(cpu);
 
 	/* set default policy */
-	ret = cpufreq_set_policy(&new_policy);
+	ret = cpufreq_set_policy(&new_policy); /* 设置默认策略 */
 	if (ret) {
 		dprintk("setting policy failed\n");
 		goto err_out_unregister;
@@ -1413,7 +1448,12 @@ static int __cpufreq_governor(struct cpufreq_policy *policy, unsigned int event)
 	return ret;
 }
 
-
+/**ltl
+ * 功能: 注册调频策略的调节器
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int cpufreq_register_governor(struct cpufreq_governor *governor)
 {
 	int err;
@@ -1514,7 +1554,7 @@ static int __cpufreq_set_policy(struct cpufreq_policy *data, struct cpufreq_poli
 	/* notification of the new policy */
 	blocking_notifier_call_chain(&cpufreq_policy_notifier_list,
 			CPUFREQ_NOTIFY, policy);
-
+	/* 设置频率 */
 	data->min = policy->min;
 	data->max = policy->max;
 
@@ -1564,6 +1604,12 @@ error_out:
  *
  *	Sets a new CPU frequency and voltage scaling policy.
  */
+/**ltl
+ * 功能: 设置CPU调频策略
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int cpufreq_set_policy(struct cpufreq_policy *policy)
 {
 	int ret = 0;
@@ -1571,7 +1617,7 @@ int cpufreq_set_policy(struct cpufreq_policy *policy)
 
 	if (!policy)
 		return -EINVAL;
-
+	/* 获取此CPU原先的调频策略 */
 	data = cpufreq_cpu_get(policy->cpu);
 	if (!data)
 		return -EINVAL;
@@ -1579,7 +1625,7 @@ int cpufreq_set_policy(struct cpufreq_policy *policy)
 	if (unlikely(lock_policy_rwsem_write(policy->cpu)))
 		return -EINVAL;
 
-
+	/* 设置新的调频策略 */
 	ret = __cpufreq_set_policy(data, policy);
 	data->user_policy.min = data->min;
 	data->user_policy.max = data->max;
@@ -1722,6 +1768,7 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 		spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
 		return -EBUSY;
 	}
+	/* 记录调频驱动对象(eg:acpi_cpufreq) */
 	cpufreq_driver = driver_data;
 	spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
 

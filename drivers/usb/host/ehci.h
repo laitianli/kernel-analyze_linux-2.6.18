@@ -48,8 +48,8 @@ struct ehci_stats {
 
 struct ehci_hcd {			/* one per controller */
 	/* glue to PCI and HCD framework */
-	struct ehci_caps __iomem *caps;
-	struct ehci_regs __iomem *regs;
+	struct ehci_caps __iomem *caps;	/* 功能寄存器起始地址 */
+	struct ehci_regs __iomem *regs;	/* 操作寄存器起始地址 */
 	struct ehci_dbg_port __iomem *debug;
 
 	__u32			hcs_params;	/* cached register copy */

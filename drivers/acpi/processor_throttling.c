@@ -272,6 +272,16 @@ static int acpi_processor_throttling_notifier(unsigned long event, void *data)
 /*
  * _TPC - Throttling Present Capabilities
  */
+/**ltl
+ * 功能: 获取_TPC对象
+ * 参数:
+ * 返回值:
+ * 说明: _TPC(Throttling present capabilities),此对象返回值值为一个整数，表示在_TTS对象中所有TState从第几个TState可用。
+ *       0->表示0~N所有的Tstate都有效
+ *		1->表示1~N区间的Tstate有效
+ *		2->表示2~N区间的TState有效
+ *		以此类推。。。
+ */
 static int acpi_processor_get_platform_limit(struct acpi_processor *pr)
 {
 	acpi_status status = 0;
@@ -297,7 +307,7 @@ int acpi_processor_tstate_has_changed(struct acpi_processor *pr)
 	int current_state;
 	struct acpi_processor_limit *limit;
 	int target_state;
-
+	/* 读取_TPC */
 	result = acpi_processor_get_platform_limit(pr);
 	if (result) {
 		/* Throttling Limit is unsupported */
@@ -346,6 +356,14 @@ int acpi_processor_tstate_has_changed(struct acpi_processor *pr)
 /*
  * _PTC - Processor Throttling Control (and status) register location
  */
+/**ltl
+ * 功能: 获取_PTC对象信息
+ * 参数:
+ * 返回值:
+ * 说明: _PTC(processor throttling control),此对象包括用于控制CPU throttling的寄存器信息，其返回值:
+ *			control register->describe the throttling control register
+ *			status register-> describe the throttling status register
+ */
 static int acpi_processor_get_throttling_control(struct acpi_processor *pr)
 {
 	int result = 0;
@@ -385,6 +403,8 @@ static int acpi_processor_get_throttling_control(struct acpi_processor *pr)
 		result = -EFAULT;
 		goto end;
 	}
+
+	/* 控制寄存器 */
 	memcpy(&pr->throttling.control_register, obj.buffer.pointer,
 	       sizeof(struct acpi_ptc_register));
 
@@ -401,7 +421,7 @@ static int acpi_processor_get_throttling_control(struct acpi_processor *pr)
 		result = -EFAULT;
 		goto end;
 	}
-
+	/* 状态寄存器 */
 	memcpy(&pr->throttling.status_register, obj.buffer.pointer,
 	       sizeof(struct acpi_ptc_register));
 
@@ -429,6 +449,17 @@ static int acpi_processor_get_throttling_control(struct acpi_processor *pr)
 
 /*
  * _TSS - Throttling Supported States
+ */
+/**ltl
+ * 功能: 获取_TSS对象
+ * 参数:
+ * 返回值:
+ * 说明: _TSS(throttling supported states),此对象包括信息:
+ *		present	->百分比
+ *		power	->最大的功耗
+ *		latency	->切换T状态的最大延迟时间
+ *		control	->当要切换T状态时，往THROTTLING_CTRL寄存器写入的值
+ *		status	->当从THROTTLE_STATUS寄存器读出的值与此值相等，说明切换T状态成功。
  */
 static int acpi_processor_get_throttling_states(struct acpi_processor *pr)
 {
@@ -470,8 +501,7 @@ static int acpi_processor_get_throttling_states(struct acpi_processor *pr)
 	for (i = 0; i < pr->throttling.state_count; i++) {
 
 		struct acpi_processor_tx_tss *tx =
-		    (struct acpi_processor_tx_tss *)&(pr->throttling.
-						      states_tss[i]);
+		    (struct acpi_processor_tx_tss *)&(pr->throttling.states_tss[i]);
 
 		state.length = sizeof(struct acpi_processor_tx_tss);
 		state.pointer = tx;
@@ -722,9 +752,8 @@ static int acpi_read_throttling_status(struct acpi_processor *pr,
 		bit_width = throttling->status_register.bit_width;
 		bit_offset = throttling->status_register.bit_offset;
 
-		acpi_os_read_port((acpi_io_address) throttling->status_register.
-				  address, (u32 *) &ptc_value,
-				  (u32) (bit_width + bit_offset));
+		acpi_os_read_port((acpi_io_address) throttling->status_register.address,
+				(u32 *) &ptc_value, (u32) (bit_width + bit_offset));
 		ptc_mask = (1 << bit_width) - 1;
 		*value = (acpi_integer) ((ptc_value >> bit_offset) & ptc_mask);
 		ret = 0;
@@ -756,8 +785,7 @@ static int acpi_write_throttling_state(struct acpi_processor *pr,
 		ptc_mask = (1 << bit_width) - 1;
 		ptc_value = value & ptc_mask;
 
-		acpi_os_write_port((acpi_io_address) throttling->
-					control_register.address,
+		acpi_os_write_port((acpi_io_address) throttling->control_register.address,
 					(u32) (ptc_value << bit_offset),
 					(u32) (bit_width + bit_offset));
 		ret = 0;
@@ -779,8 +807,7 @@ static int acpi_get_throttling_state(struct acpi_processor *pr,
 
 	for (i = 0; i < pr->throttling.state_count; i++) {
 		struct acpi_processor_tx_tss *tx =
-		    (struct acpi_processor_tx_tss *)&(pr->throttling.
-						      states_tss[i]);
+		    (struct acpi_processor_tx_tss *)&(pr->throttling.states_tss[i]);
 		if (tx->control == value)
 			break;
 	}
@@ -796,8 +823,7 @@ static int acpi_get_throttling_value(struct acpi_processor *pr,
 
 	if (state >= 0 && state <= pr->throttling.state_count) {
 		struct acpi_processor_tx_tss *tx =
-		    (struct acpi_processor_tx_tss *)&(pr->throttling.
-						      states_tss[state]);
+		    (struct acpi_processor_tx_tss *)&(pr->throttling.states_tss[state]);
 		*value = tx->control;
 		ret = 0;
 	}
@@ -1066,8 +1092,7 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 			t_state.cpu = i;
 			cpu_mask = cpumask_of_cpu(i);
 			set_cpus_allowed_ptr(current, &cpu_mask);
-			ret = match_pr->throttling.
-				acpi_processor_set_throttling(
+			ret = match_pr->throttling.acpi_processor_set_throttling(
 				match_pr, t_state.target_state);
 		}
 	}
@@ -1086,7 +1111,12 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 	set_cpus_allowed_ptr(current, &saved_mask);
 	return ret;
 }
-
+/**ltl  
+ * 功能: 获取throttling信息
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int acpi_processor_get_throttling_info(struct acpi_processor *pr)
 {
 	int result = 0;
@@ -1105,9 +1135,9 @@ int acpi_processor_get_throttling_info(struct acpi_processor *pr)
 	 * Evaluate _PTC, _TSS and _TPC
 	 * They must all be present or none of them can be used.
 	 */
-	if (acpi_processor_get_throttling_control(pr) ||
-		acpi_processor_get_throttling_states(pr) ||
-		acpi_processor_get_platform_limit(pr))
+	if (acpi_processor_get_throttling_control(pr) || /* 获取_PTC信息 */
+		acpi_processor_get_throttling_states(pr) ||  /* 获取_TSS状态信息 */
+		acpi_processor_get_platform_limit(pr))		 /* 获取_TPC信息 */
 	{
 		pr->throttling.acpi_processor_get_throttling =
 		    &acpi_processor_get_throttling_fadt;
@@ -1117,16 +1147,16 @@ int acpi_processor_get_throttling_info(struct acpi_processor *pr)
 			return 0;
 	} else {
 		pr->throttling.acpi_processor_get_throttling =
-		    &acpi_processor_get_throttling_ptc;
+		    &acpi_processor_get_throttling_ptc; /* 获取current TState  */
 		pr->throttling.acpi_processor_set_throttling =
-		    &acpi_processor_set_throttling_ptc;
+		    &acpi_processor_set_throttling_ptc; /* 设置TState */
 	}
 
 	/*
 	 * If TSD package for one CPU can't be parsed successfully, it means
 	 * that this CPU will have no coordination with other CPUs.
 	 */
-	if (acpi_processor_get_tsd(pr)) {
+	if (acpi_processor_get_tsd(pr)) {/* 获取_TSD对象值 */
 		pthrottling = &pr->throttling;
 		pthrottling->tsd_valid_flag = 0;
 		cpu_set(pr->id, pthrottling->shared_cpu_map);
@@ -1147,7 +1177,7 @@ int acpi_processor_get_throttling_info(struct acpi_processor *pr)
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Found %d throttling states\n",
 			  pr->throttling.state_count));
 
-	pr->flags.throttling = 1;
+	pr->flags.throttling = 1; /* support TState */
 
 	/*
 	 * Disable throttling (if enabled).  We'll let subsequent policy (e.g.
@@ -1155,7 +1185,7 @@ int acpi_processor_get_throttling_info(struct acpi_processor *pr)
 	 * we'll crank up the speed.
 	 */
 
-	result = acpi_processor_get_throttling(pr);
+	result = acpi_processor_get_throttling(pr); /* 此处作用 */
 	if (result)
 		goto end;
 

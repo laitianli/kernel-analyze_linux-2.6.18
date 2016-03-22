@@ -786,7 +786,12 @@ static void acpi_device_get_busid(struct acpi_device *device,
 		break;
 	}
 }
-
+/**ltl
+ * 功能: 根据对象类型设置HID
+ * 参数:
+ * 返回值:
+ * 说明: acpi设备的驱动是根据HID加载
+ */
 static void acpi_device_set_id(struct acpi_device *device,
 			       struct acpi_device *parent, acpi_handle handle,
 			       int type)

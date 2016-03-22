@@ -158,7 +158,7 @@ static void ehci_mem_cleanup (struct ehci_hcd *ehci)
 	kfree(ehci->pshadow);
 	ehci->pshadow = NULL;
 }
-
+/* 分配ehci数据结构内存池 */
 /* remember to add cleanup code (above) if you add anything here */
 static int ehci_mem_init (struct ehci_hcd *ehci, gfp_t flags)
 {

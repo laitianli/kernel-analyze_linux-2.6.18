@@ -256,7 +256,7 @@ int pcibios_enable_resources(struct pci_dev *dev, int mask)
 	u16 cmd, old_cmd;
 	int idx;
 	struct resource *r;
-	//读取设备的命令寄存器
+	/* 读取设备的命令寄存器 */
 	pci_read_config_word(dev, PCI_COMMAND, &cmd);
 	old_cmd = cmd;
 	for(idx = 0; idx < PCI_NUM_RESOURCES; idx++) {
@@ -267,7 +267,7 @@ int pcibios_enable_resources(struct pci_dev *dev, int mask)
 		r = &dev->resource[idx];
 		if (!(r->flags & (IORESOURCE_IO | IORESOURCE_MEM)))
 			continue;
-		//在资源数据中的[6]是rom空间，而标志又不是rom空间标志的话，直接处理下一个
+		/* 在资源数据中的[6]是rom空间，而标志又不是rom空间标志的话，直接处理下一个 */
 		if ((idx == PCI_ROM_RESOURCE) &&
 				(!(r->flags & IORESOURCE_ROM_ENABLE)))
 			continue;
@@ -275,7 +275,7 @@ int pcibios_enable_resources(struct pci_dev *dev, int mask)
 			printk(KERN_ERR "PCI: Device %s not available because of resource collisions\n", pci_name(dev));
 			return -EINVAL;
 		}
-		//给命令寄存器中的值相应位置位
+		/* 给命令寄存器中的值相应位置位 */
 		if (r->flags & IORESOURCE_IO)
 			cmd |= PCI_COMMAND_IO;
 		if (r->flags & IORESOURCE_MEM)
@@ -283,7 +283,7 @@ int pcibios_enable_resources(struct pci_dev *dev, int mask)
 	}
 	if (cmd != old_cmd) {
 		printk("PCI: Enabling device %s (%04x -> %04x)\n", pci_name(dev), old_cmd, cmd);
-		//写回命令寄存器
+		/* 写回命令寄存器 */
 		pci_write_config_word(dev, PCI_COMMAND, cmd);
 	}
 	return 0;

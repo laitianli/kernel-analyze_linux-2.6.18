@@ -241,7 +241,7 @@ struct usb_host_config {
 
 	/* Interface information available even when this is not the
 	 * active configuration */
-	struct usb_interface_cache *intf_cache[USB_MAXINTERFACES];
+	struct usb_interface_cache *intf_cache[USB_MAXINTERFACES]; /* 解析到的接口信息 */
 
 	unsigned char *extra;   /* Extra descriptors */
 	int extralen;

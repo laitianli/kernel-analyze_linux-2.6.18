@@ -306,7 +306,12 @@ static int acpi_processor_info_open_fs(struct inode *inode, struct file *file)
 	return single_open(file, acpi_processor_info_seq_show,
 			   PDE(inode)->data);
 }
-
+/**ltl
+ * 功能: 在目录/proc/acpi/processor/CPU1下创建info,throttling,power三个文件
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int acpi_processor_add_fs(struct acpi_device *device)
 {
 	struct proc_dir_entry *entry = NULL;
@@ -433,7 +438,7 @@ static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device
 	 * is required for proper C3 usage (to maintain cache coherency).
 	 */
 	if (acpi_fadt.V1_pm2_cnt_blk && acpi_fadt.pm2_cnt_len) {
-		pr->flags.bm_control = 1;
+		pr->flags.bm_control = 1; /* 标记是否具有总线仲裁控制权 */
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 				  "Bus mastering arbitration control present\n"));
 	} else
@@ -445,7 +450,7 @@ static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device
 	 * have the first (boot) processor with a valid PBLK address while
 	 * all others have a NULL address.
 	 */
-	status = acpi_evaluate_object(pr->handle, NULL, NULL, &buffer);
+	status = acpi_evaluate_object(pr->handle, NULL, NULL, &buffer); /* 读取的是什么对象? */
 	if (ACPI_FAILURE(status)) {
 		printk(KERN_ERR PREFIX "Evaluating processor object\n");
 		return -ENODEV;
@@ -457,7 +462,7 @@ static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device
 	 */
 	pr->acpi_id = object.processor.proc_id;
 
-	cpu_index = convert_acpiid_to_cpu(pr->acpi_id);
+	cpu_index = convert_acpiid_to_cpu(pr->acpi_id); /* CPU ID */
 
 	/* Handle UP system running SMP kernel, with no LAPIC in MADT */
 	if (!cpu0_initialized && (cpu_index == -1) &&
@@ -467,7 +472,7 @@ static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device
 
 	cpu0_initialized = 1;
 
-	pr->id = cpu_index;
+	pr->id = cpu_index; /* CPU ID */
 
 	/*
 	 *  Extra Processor objects may be enumerated on MP systems with
@@ -501,8 +506,8 @@ static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device
 		printk(KERN_ERR PREFIX "Invalid PBLK length [%d]\n",
 			    object.processor.pblk_length);
 	else {
-		pr->throttling.address = object.processor.pblk_address;
-		pr->throttling.duty_offset = acpi_fadt.duty_offset;
+		pr->throttling.address = object.processor.pblk_address; /* throttling控制地址 */
+		pr->throttling.duty_offset = acpi_fadt.duty_offset;/**/
 		pr->throttling.duty_width = acpi_fadt.duty_width;
 
 		pr->pblk = object.processor.pblk_address;
@@ -520,8 +525,8 @@ static int acpi_processor_get_info(struct acpi_processor *pr, struct acpi_device
 #ifdef CONFIG_CPU_FREQ
 	acpi_processor_ppc_has_changed(pr);
 #endif
-	acpi_processor_get_throttling_info(pr);
-	acpi_processor_get_limit_info(pr);
+	acpi_processor_get_throttling_info(pr); /* 获取TState信息 */
+	acpi_processor_get_limit_info(pr);		/* 设置limit标志 */
 
 	return 0;
 }
@@ -536,7 +541,7 @@ static int acpi_processor_start(struct acpi_device *device)
 
 
 	pr = acpi_driver_data(device);
-
+	/* 获取TState */
 	result = acpi_processor_get_info(pr, device);
 	if (result) {
 		/* Processor is physically not present */
@@ -559,18 +564,18 @@ static int acpi_processor_start(struct acpi_device *device)
 	processor_device_array[pr->id] = (void *)device;
 
 	processors[pr->id] = pr;
-
+	/* 在目录/proc/acpi/processor/CPUx下创建文件 */
 	result = acpi_processor_add_fs(device);
 	if (result)
 		goto end;
-
+	/* 注册通知接口 */
 	status = acpi_install_notify_handler(pr->handle, ACPI_DEVICE_NOTIFY,
 					     acpi_processor_notify, pr);
 
 	/* _PDC call should be done before doing anything else (if reqd.). */
-	arch_acpi_processor_init_pdc(pr);
-	acpi_processor_set_pdc(pr);
-
+	arch_acpi_processor_init_pdc(pr); /* 初始化_PDC */
+	acpi_processor_set_pdc(pr);		  /* 设置_PDC */
+	/* 初始化power */
 	acpi_processor_power_init(pr, device);
 
 	if (pr->flags.throttling) {
@@ -584,7 +589,12 @@ static int acpi_processor_start(struct acpi_device *device)
 
 	return result;
 }
-
+/**ltl
+ * 功能: 处理器通知接口
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void acpi_processor_notify(acpi_handle handle, u32 event, void *data)
 {
 	struct acpi_processor *pr = (struct acpi_processor *)data;
@@ -596,7 +606,7 @@ static void acpi_processor_notify(acpi_handle handle, u32 event, void *data)
 
 	if (acpi_bus_get_device(pr->handle, &device))
 		return;
-
+	/* <事件类型在ACPI spec有说明> */
 	switch (event) {
 	case ACPI_PROCESSOR_NOTIFY_PERFORMANCE:
 		acpi_processor_ppc_has_changed(pr);
@@ -923,7 +933,7 @@ static int __init acpi_processor_init(void)
 	if (!acpi_processor_dir)
 		return 0;
 	acpi_processor_dir->owner = THIS_MODULE;
-
+	/* 注册processor驱动 */
 	result = acpi_bus_register_driver(&acpi_processor_driver);
 	if (result < 0) {
 		remove_proc_entry(ACPI_PROCESSOR_CLASS, acpi_root_dir);
@@ -931,7 +941,7 @@ static int __init acpi_processor_init(void)
 	}
 
 	acpi_processor_install_hotplug_notify();
-
+	/*  */
 	acpi_thermal_cpufreq_init();
 
 	acpi_processor_ppc_init();

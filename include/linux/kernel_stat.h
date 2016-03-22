@@ -13,15 +13,15 @@
  * some kernel statistics (CPU usage, context switches ...),
  * used by rstatd/perfmeter
  */
-
+/* 此数据结构记录的是所有进程在某一个cpu上从开始运行到当前时刻的时间统计 */
 struct cpu_usage_stat {
-	cputime64_t user;
+	cputime64_t user;	 /* 用户耗时 */
 	cputime64_t nice;
-	cputime64_t system;
-	cputime64_t softirq;
-	cputime64_t irq;
-	cputime64_t idle;
-	cputime64_t iowait;
+	cputime64_t system;  /* 系统耗时 */
+	cputime64_t softirq; /* 软中断耗时 */
+	cputime64_t irq;	 /* 中断耗时 */
+	cputime64_t idle;	 /* 空闲 */
+	cputime64_t iowait;  /* io等待时间 */
 	cputime64_t steal;
 };
 

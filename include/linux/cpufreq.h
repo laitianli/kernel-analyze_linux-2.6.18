@@ -81,7 +81,8 @@ struct cpufreq_policy {
 	unsigned int		max;    /* in kHz */
 	unsigned int		cur;    /* in kHz, only needed if cpufreq
 					 * governors are used */
-        unsigned int		policy; /* see above */
+	/* 调节器标识，值可为: CPUFREQ_POLICY_POWERSAVE、CPUFREQ_POLICY_PERFORMANCE */
+    unsigned int		policy; /* see above */
 	struct cpufreq_governor	*governor; /* see below */
 
 	struct work_struct	update; /* if update_policy() needs to be
@@ -202,7 +203,7 @@ struct cpufreq_driver {
 	int	(*init)		(struct cpufreq_policy *policy);
 	int	(*verify)	(struct cpufreq_policy *policy);
 
-	/* define one out of two */
+	/* define one out of two(二选一) */
 	int	(*setpolicy)	(struct cpufreq_policy *policy);
 	int	(*target)	(struct cpufreq_policy *policy,
 				 unsigned int target_freq,

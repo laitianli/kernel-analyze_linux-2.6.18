@@ -19,6 +19,13 @@
 #include <linux/smp.h>
 
 #include <asm/irq.h>
+
+/*
+ * 软中断与tasklet的区别: 
+ * 1.tasklet是由软中断实现。
+ * 2.软中断的处理函数必须是可重入，因为一个软中断处理函数会被多个CPU同时执行；而tasklet在实现上已经保证一个tasklet只会被一个cpu执行。
+ * 3.软中断主由内核线程实现。
+ */
 /*
    - No shared variables, all the data are CPU local.
    - If a softirq needs serialization, let it serialize itself
@@ -389,7 +396,7 @@ static void tasklet_action(struct softirq_action *a)
 
 		list = list->next;
 
-		if (tasklet_trylock(t)) {
+		if (tasklet_trylock(t)) { /* 设置TASKLET_STATE_RUN标志实现一个tasklet不会被多个CPU执行 */
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
@@ -641,14 +648,23 @@ __init int spawn_ksoftirqd(void)
 /*
  * Call a function on all processors
  */
+/**ltl
+ * 功能: 让所有的处理器执行func函数
+ * 参数: func	-> 每个处理所要执行的函数
+ *		info	-> 回调函数func的参数
+ *		retry-> <暂无使用>
+ *		wait	-> 1.表示要等待其它的CPU执行完成
+ * 返回值:
+ * 说明:
+ */
 int on_each_cpu(void (*func) (void *info), void *info, int retry, int wait)
 {
 	int ret = 0;
 
 	preempt_disable();
-	ret = smp_call_function(func, info, retry, wait);
+	ret = smp_call_function(func, info, retry, wait); /* 在其它的所有CPU执行func函数 */
 	local_irq_disable();
-	func(info);
+	func(info);/* 在此CPU上执行func函数 */
 	local_irq_enable();
 	preempt_enable();
 	return ret;

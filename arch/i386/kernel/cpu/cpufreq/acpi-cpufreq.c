@@ -95,7 +95,12 @@ acpi_processor_read_port(
 	}
 	return 0;
 }
-
+/**ltl
+ * 功能: 设置当前CPU的P-state
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int
 acpi_processor_set_performance (
 	struct cpufreq_acpi_io	*data,
@@ -131,13 +136,13 @@ acpi_processor_set_performance (
 	 * control_register.
 	 */
 
-	port = perf->control_register.address;
-	bit_width = perf->control_register.bit_width;
-	value = (u32) perf->states[state].control;
+	port = perf->control_register.address; /* 端口号 */
+	bit_width = perf->control_register.bit_width;   /* 位长 */
+	value = (u32) perf->states[state].control;		/* 控制值 */
 
 	dprintk("Writing 0x%08x to port 0x%04x\n", value, port);
 
-	ret = acpi_processor_write_port(port, bit_width, value);
+	ret = acpi_processor_write_port(port, bit_width, value); /* 写端口 */
 	if (ret) {
 		dprintk("Invalid port width 0x%04x\n", bit_width);
 		return (ret);
@@ -148,7 +153,7 @@ acpi_processor_set_performance (
 	 * As read status_register is an expensive operation and there 
 	 * are no specific error cases where an IO port write will fail.
 	 */
-	if (acpi_pstate_strict) {
+	if (acpi_pstate_strict) { /* 通过读取P-state状态寄存器值来判定设置P-state状态是否成功  */
 		/* Then we read the 'status_register' and compare the value 
 		 * with the target state's 'status' to make sure the 
 		 * transition was successful.
@@ -163,7 +168,7 @@ acpi_processor_set_performance (
 			(u32) perf->states[state].status, port);
 
 		for (i = 0; i < 100; i++) {
-			ret = acpi_processor_read_port(port, bit_width, &value);
+			ret = acpi_processor_read_port(port, bit_width, &value); /* 读取端口 */
 			if (ret) {	
 				dprintk("Invalid port width 0x%04x\n", bit_width);
 				return (ret);
@@ -183,7 +188,7 @@ acpi_processor_set_performance (
 	}
 
 	dprintk("Transition successful after %d microseconds\n", i * 10);
-
+	/* 记录当前状态T-state下标  */
 	perf->state = state;
 	return (retval);
 }
@@ -209,7 +214,7 @@ acpi_cpufreq_target (
 	unsigned int tmp;
 
 	dprintk("acpi_cpufreq_setpolicy\n");
-
+	/* 获取target_freq对应的状态下标(如果target_freq=0，relation=CPUFREQ_RELATION_L，则next_state为频点列表的最后一个元素的下标) */
 	result = cpufreq_frequency_table_target(policy,
 			data->freq_table,
 			target_freq,
@@ -258,7 +263,7 @@ acpi_cpufreq_target (
 			result = -EAGAIN;
 			break;
 		}
-
+		/* 设置P-state */
 		result = acpi_processor_set_performance (data, j, next_state);
 		if (result) {
 			result = -EAGAIN;
@@ -323,7 +328,12 @@ acpi_cpufreq_verify (
 	return (result);
 }
 
-
+/**ltl
+ * 功能: 设置当前P-state及相应频率值
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static unsigned long
 acpi_cpufreq_guess_freq (
 	struct cpufreq_acpi_io	*data,
@@ -386,7 +396,15 @@ static int acpi_cpufreq_early_init_acpi(void)
 	/* Do initialization in ACPI core */
 	return acpi_processor_preregister_performance(acpi_perf_data);
 }
-
+/**ltl
+ * 功能: 初始化cpu调频策略对象
+ * 参数:
+ * 返回值:
+ * 说明: 此接口由函数cpufreq_add_dev调用，此函数主要功能: 
+ * 		1.分配全局数cpufreq_acpi_io对象
+ *		2.读取_PCT和_PSS两个对象信息
+ *		3.分配频率列表
+ */
 static int
 acpi_cpufreq_cpu_init (
 	struct cpufreq_policy   *policy)
@@ -458,11 +476,11 @@ acpi_cpufreq_cpu_init (
 		if ((perf->states[i].transition_latency * 1000) > policy->cpuinfo.transition_latency)
 			policy->cpuinfo.transition_latency = perf->states[i].transition_latency * 1000;
 	}
-	policy->governor = CPUFREQ_DEFAULT_GOVERNOR;
+	policy->governor = CPUFREQ_DEFAULT_GOVERNOR; /* 默认调节器 */
 
 	/* The current speed is unknown and not detectable by ACPI...  */
-	policy->cur = acpi_cpufreq_guess_freq(data, policy->cpu);
-
+	policy->cur = acpi_cpufreq_guess_freq(data, policy->cpu); /* 设置cpu的P-state及当前的频率 */
+	/* 记录频率列表 */
 	/* table init */
 	for (i=0; i<=perf->state_count; i++)
 	{
@@ -472,7 +490,7 @@ acpi_cpufreq_cpu_init (
 		else
 			data->freq_table[i].frequency = CPUFREQ_TABLE_END;
 	}
-
+	/* 记录最大与最小的频率 */
 	result = cpufreq_frequency_table_cpuinfo(policy, data->freq_table);
 	if (result) {
 		goto err_freqfree;
@@ -547,10 +565,10 @@ acpi_cpufreq_resume (
 
 
 static struct freq_attr* acpi_cpufreq_attr[] = {
-	&cpufreq_freq_attr_scaling_available_freqs,
+	&cpufreq_freq_attr_scaling_available_freqs, /* 可用的CPU频率 */
 	NULL,
 };
-
+/* acpi_cpufreq驱动对象 */
 static struct cpufreq_driver acpi_cpufreq_driver = {
 	.verify	= acpi_cpufreq_verify,
 	.target	= acpi_cpufreq_target,
@@ -563,14 +581,14 @@ static struct cpufreq_driver acpi_cpufreq_driver = {
 	.flags	= CPUFREQ_STICKY,
 };
 
-
+/* acpi_cpufreq驱动的初始化 */
 static int __init
 acpi_cpufreq_init (void)
 {
 	dprintk("acpi_cpufreq_init\n");
 
 	acpi_cpufreq_early_init_acpi();
-
+	/* 注册acpi_cpufreq驱动对象 */
  	return cpufreq_register_driver(&acpi_cpufreq_driver);
 }
 

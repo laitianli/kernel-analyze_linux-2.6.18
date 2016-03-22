@@ -5413,8 +5413,8 @@ static void ata_host_init(struct ata_port *ap, struct Scsi_Host *host,
 #endif
 
 	INIT_WORK(&ap->port_task, NULL, NULL);
-	INIT_WORK(&ap->hotplug_task, ata_scsi_hotplug, ap);//扫描SATA设备任务
-	INIT_WORK(&ap->scsi_rescan_task, ata_scsi_dev_rescan, ap);//重新扫描磁盘，发送命令使磁盘转动
+	INIT_WORK(&ap->hotplug_task, ata_scsi_hotplug, ap);/* 扫描SATA设备任务 */
+	INIT_WORK(&ap->scsi_rescan_task, ata_scsi_dev_rescan, ap);/* 重新扫描磁盘，发送命令使磁盘转动 */
 	INIT_LIST_HEAD(&ap->eh_done_q);
 	init_waitqueue_head(&ap->eh_wait_q);
 
@@ -5422,13 +5422,13 @@ static void ata_host_init(struct ata_port *ap, struct Scsi_Host *host,
 	ap->cbl = ATA_CBL_NONE;
 	if (ap->flags & ATA_FLAG_SATA)
 		ap->cbl = ATA_CBL_SATA;
-	//对每个端口对应的ata_device对象初始化(主/从设备)
+	/* 对每个端口对应的ata_device对象初始化(主/从设备) */
 	for (i = 0; i < ATA_MAX_DEVICES; i++) 
 	{
 		struct ata_device *dev = &ap->device[i];
 		dev->ap = ap;
 		dev->devno = i;
-		//初始化ata_device对象
+		/* 初始化ata_device对象 */
 		ata_dev_init(dev);
 	}
 
@@ -5455,11 +5455,11 @@ static void ata_host_init(struct ata_port *ap, struct Scsi_Host *host,
  *	New ata_port on success, for NULL on error.
  */
 /**ltl
-功能:分配scsi_host对象，分配ata_port对象并对其初始化
-参数:
-返回值:
-说明:
-*/
+ * 功能:分配scsi_host对象，分配ata_port对象并对其初始化
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static struct ata_port * ata_host_add(const struct ata_probe_ent *ent,
 				      struct ata_host_set *host_set,
 				      unsigned int port_no)
@@ -5476,17 +5476,17 @@ static struct ata_port * ata_host_add(const struct ata_probe_ent *ent,
 		       port_no);
 		return NULL;
 	}
-	//分配scsi控制器,注:每个端口都分配一个主机控制器Scsi_Host
+	/* 分配scsi控制器,注:每个端口都分配一个主机控制器Scsi_Host */
 	host = scsi_host_alloc(ent->sht, sizeof(struct ata_port));
 	if (!host)
 		return NULL;
 
 	host->transportt = &ata_scsi_transport_template;
-	//Scsi_Host的私有数据成员存放端口对象ata_port
+	/* Scsi_Host的私有数据成员存放端口对象ata_port */
 	ap = ata_shost_to_port(host);
-	//对ata_port成员初始化
+	/* 对ata_port成员初始化 */
 	ata_host_init(ap, host, host_set, ent, port_no);
-	//启动AHCI控制器。--
+	/* 启动AHCI控制器。-- */
 	rc = ap->ops->port_start(ap);
 	if (rc)
 		goto err_out;
@@ -5532,12 +5532,12 @@ int ata_device_add(const struct ata_probe_ent *ent)
 		return 0;
 	spin_lock_init(&host_set->lock);
 
-	host_set->dev = dev;//为pci_dev中的dev
-	host_set->n_ports = ent->n_ports;//端口数
-	host_set->irq = ent->irq;//中断号
-	host_set->mmio_base = ent->mmio_base;//内存空间基地址的虚拟地址
+	host_set->dev = dev;/* 为pci_dev中的dev */
+	host_set->n_ports = ent->n_ports;/* 端口数 */
+	host_set->irq = ent->irq;/* 中断号 */
+	host_set->mmio_base = ent->mmio_base;/* 内存空间基地址的虚拟地址 */
 	host_set->private_data = ent->private_data;
-	host_set->ops = ent->port_ops;//操作接口对象，直接操作AHCI寄存器对象
+	host_set->ops = ent->port_ops;/* 操作接口对象，直接操作AHCI寄存器对象 */
 	host_set->flags = ent->host_set_flags;
 
 	/* register each port bound to this device */
@@ -5545,7 +5545,7 @@ int ata_device_add(const struct ata_probe_ent *ent)
 	{
 		struct ata_port *ap;
 		unsigned long xfer_mode_mask;
-		//分配主机控制器对象Scsi_Host，并与端口ata_port对象相关联
+		/* 分配主机控制器对象Scsi_Host，并与端口ata_port对象相关联 */
 		ap = ata_host_add(ent, host_set, i);
 		if (!ap)
 			goto err_out;
@@ -5564,11 +5564,11 @@ int ata_device_add(const struct ata_probe_ent *ent)
 				ap->ioaddr.ctl_addr,
 				ap->ioaddr.bmdma_addr,
 				ent->irq);
-		//校验端口状态
+		/* 校验端口状态 */
 		ata_chk_status(ap);
-		//对ahci接口，这个函数没有作处理
+		/* 对ahci接口，这个函数没有作处理*/
 		host_set->ops->irq_clear(ap);
-		//冻结端口
+		/* 冻结端口 */
 		ata_eh_freeze_port(ap);	/* freeze port before requesting IRQ */
 		count++;
 	}
@@ -5577,7 +5577,7 @@ int ata_device_add(const struct ata_probe_ent *ent)
 		goto err_free_ret;
 
 	/* obtain irq, that is shared between channels */
-	//注册中断处理函数ahci_interrupt，注:所有的端口共用一个中断处理函数
+	/* 注册中断处理函数ahci_interrupt，注:所有的端口共用一个中断处理函数 */
 	rc = request_irq(ent->irq, ent->port_ops->irq_handler, ent->irq_flags, DRV_NAME, host_set);
 	if (rc) {
 		dev_printk(KERN_ERR, dev, "irq %lu request failed: %d\n",
@@ -5596,13 +5596,13 @@ int ata_device_add(const struct ata_probe_ent *ent)
 		ap = host_set->ports[i];
 
 		/* init sata_spd_limit to the current value */
-		//获取端口的传输速率
+		/* 获取端口的传输速率 */
 		if (sata_scr_read(ap, SCR_CONTROL, &scontrol) == 0) {
 			int spd = (scontrol >> 4) & 0xf;
 			ap->hw_sata_spd_limit &= (1 << spd) - 1;
 		}
 		ap->sata_spd_limit = ap->hw_sata_spd_limit;
-		//把主机适配器Scsi_Host添加到系统中
+		/* 把主机适配器Scsi_Host添加到系统中 */
 		rc = scsi_add_host(ap->host, dev);
 		if (rc) {
 			ata_port_printk(ap, KERN_ERR, "scsi_add_host failed\n");
@@ -5612,7 +5612,7 @@ int ata_device_add(const struct ata_probe_ent *ent)
 			 * at the very least
 			 */
 		}
-		//刷一下错误队列:完成的任务1.软重启，获取ata设备类型(ata_device.class)
+		/* 刷一下错误队列:完成的任务1.软重启，获取ata设备类型(ata_device.class) */
 		if (ap->ops->error_handler) 
 		{
 			struct ata_eh_info *ehi = &ap->eh_info;
@@ -5622,22 +5622,22 @@ int ata_device_add(const struct ata_probe_ent *ent)
 
 			/* kick EH for boot probing */
 			spin_lock_irqsave(ap->lock, flags);
-			//ata_eh_info信息在ata_scsi_error函数中用到。
+			/* ata_eh_info信息在ata_scsi_error函数中用到。*/
 			ehi->probe_mask = (1 << ATA_MAX_DEVICES) - 1;
-			ehi->action |= ATA_EH_SOFTRESET;//设置错误恢复的方法:软重启
-			ehi->flags |= ATA_EHI_NO_AUTOPSY | ATA_EHI_QUIET;//设置非自动分析错误标志和"安静"标志(不打印错误日志)
+			ehi->action |= ATA_EH_SOFTRESET;/* 设置错误恢复的方法:软重启 */
+			ehi->flags |= ATA_EHI_NO_AUTOPSY | ATA_EHI_QUIET;/* 设置非自动分析错误标志和"安静"标志(不打印错误日志)*/
 
-			ap->pflags |= ATA_PFLAG_LOADING;//设置正加载标志
+			ap->pflags |= ATA_PFLAG_LOADING;/* 设置正加载标志 */
 			
 			/*唤醒SCSI层中的错误处理线程,调用ata_scsi_error处理函数，最终调用控制器中的端口错误处理函数error_handler(ahci_error_handler)
 			*在错误处理函数中，发送ATA指令ATA_CMD_ID_ATA获取ATA设备的id
 			*/			
-			ata_port_schedule_eh(ap);//设置标示ATA_PFLAG_EH_PENDING，并唤醒错误处理线程，最终调用ata_scsi_error
+			ata_port_schedule_eh(ap);/* 设置标示ATA_PFLAG_EH_PENDING，并唤醒错误处理线程，最终调用ata_scsi_error */
 
 			spin_unlock_irqrestore(ap->lock, flags);
 
 			/* wait for EH to finish */
-			ata_port_wait_eh(ap);//等待错误处理完成,在错误处理例程里会去读取ATA id信息
+			ata_port_wait_eh(ap);/* 等待错误处理完成,在错误处理例程里会去读取ATA id信息 */
 		} 
 		else 
 		{

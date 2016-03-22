@@ -1604,7 +1604,7 @@ free_interfaces:
 	 * claim() any interfaces not yet bound.  Many class drivers
 	 * need that: CDC, audio, video, etc.
 	 */
-	/*第个接口代表一个功能，每个接口都有一个驱动程序，载之*/
+	/*每个接口代表一个功能，每个接口都有一个驱动程序，载之*/
 	for (i = 0; i < nintf; ++i) {
 		struct usb_interface *intf = cp->interface[i];
 

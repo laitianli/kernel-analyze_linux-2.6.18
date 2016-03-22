@@ -132,7 +132,7 @@ struct request_list {
 /* 请求对象 */
 struct request {
 	struct list_head queuelist;	/* 连接件，用于插入到request_queue:queue_head */
-	struct list_head donelist;
+	struct list_head donelist;	/* 块设备软中断用到，当一个request处理完成后，通过这个成员将此request插入到per_cpu中 */
 
 	unsigned long flags;		/* see REQ_ bits below */
 
@@ -156,7 +156,7 @@ struct request {
 	struct bio *biotail;
 	/* 与IO调度器相关的私有数据*/
 	void *elevator_private;
-	void *completion_data;
+	void *completion_data; /* 对于scsi设备，此域指向scsi_cmnd对象 */
 
 	int rq_status;	/* should split this into a few status bits */
 	int errors;
@@ -186,8 +186,8 @@ struct request {
 	struct request_list *rl;
 
 	struct completion *waiting;
-	void *special;
-	char *buffer;
+	void *special;	/* 指定scsi_cmnd对象 */
+	char *buffer;   /* 指向bio列表的第一块内存(在函数init_request_from_bio中设置) */
 
 	/*
 	 * when request is used as a packet command carrier

@@ -271,7 +271,7 @@ static int scsi_bus_match(struct device *dev, struct device_driver *gendrv)
 	struct scsi_device *sdp = to_scsi_device(dev);
 	if (sdp->no_uld_attach)
 		return 0;
-	//表示scsi设备已经连接上(table 5.8)
+	/* 表示scsi设备已经连接上(table 5.8) */
 	return (sdp->inq_periph_qual == SCSI_INQ_PQ_CON)? 1: 0;
 }
 

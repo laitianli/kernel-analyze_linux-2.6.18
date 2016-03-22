@@ -124,7 +124,7 @@ void usb_release_interface_cache(struct kref *ref)
 功能:解析设备接口信息
 参数
 返回值
-说明
+说明: 接口与端点配置的排列方式 interface_1:endpoint_1_1:endpoint_1_2:...:endpoint_1_n:interface_2:endpoint_2_1:endpoint_2_2:...:endpoint_2_n
 */
 static int usb_parse_interface(struct device *ddev, int cfgno,
     struct usb_host_config *config, unsigned char *buffer, int size,
@@ -397,7 +397,7 @@ static int usb_parse_configuration(struct device *ddev, int cfgidx,
 	size -= i;
 	//注:size表示所有interface的大小
 	/* Parse all the interface/altsetting descriptors */
-	//解析每一个接口，同时一解析接口里的端点
+	//解析每一个接口，同时一解析接口里的端点(注: 一个配置有多个接口，每个接口后面跟着其端点)
 	while (size > 0) {
 		retval = usb_parse_interface(ddev, cfgno, config,
 		    buffer, size, inums, nalts);

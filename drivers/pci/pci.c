@@ -335,14 +335,14 @@ pci_set_power_state(struct pci_dev *dev, pci_power_t state)
 	if ((state == PCI_D1 || state == PCI_D2) && pci_no_d1d2(dev))
 		return 0;
 	
-	//PM capability的总线起始地址。
+	/* PM capability的总线起始地址。 */
 	/* find PCI PM capability in list */
 	pm = pci_find_capability(dev, PCI_CAP_ID_PM);
 	
 	/* abort if the device doesn't support PM capabilities */
 	if (!pm)
 		return -EIO; 
-	//电源管理寄存器
+	/* 电源管理寄存器 */
 	pci_read_config_word(dev,pm + PCI_PM_PMC,&pmc);
 	if ((pmc & PCI_PM_CAP_VER_MASK) > 3) {
 		printk(KERN_DEBUG
@@ -352,13 +352,13 @@ pci_set_power_state(struct pci_dev *dev, pci_power_t state)
 	}
 
 	/* check if this device supports the desired state */
-	//不支持D1和D2，返回错误。
+	/* 不支持D1和D2，返回错误。 */
 	if (state == PCI_D1 && !(pmc & PCI_PM_CAP_D1))
 		return -EIO;
 	else if (state == PCI_D2 && !(pmc & PCI_PM_CAP_D2))
 		return -EIO;
 	
-	//读取电源管理控制寄存器
+	/* 读取电源管理控制寄存器 */
 	pci_read_config_word(dev, pm + PCI_PM_CTRL, &pmcsr);
 
 	/* If we're (effectively) in D3, force entire word to 0.
@@ -381,7 +381,7 @@ pci_set_power_state(struct pci_dev *dev, pci_power_t state)
 		pmcsr = 0;
 		break;
 	}
-	//回写电源管理控制寄存器(新的电源开始生效)
+	/* 回写电源管理控制寄存器(新的电源开始生效) */
 	/* enter specified state */
 	pci_write_config_word(dev, pm + PCI_PM_CTRL, pmcsr);
 
@@ -398,7 +398,7 @@ pci_set_power_state(struct pci_dev *dev, pci_power_t state)
 	 */
 	if (platform_pci_set_power_state)
 		platform_pci_set_power_state(dev, state);
-	//当前状态
+	/* 当前状态 */
 	dev->current_state = state;
 
 	/* According to section 5.4.1 of the "PCI BUS POWER MANAGEMENT

@@ -39,7 +39,12 @@ static int create_files(struct dentry * dir,
 	return error;
 }
 
-
+/**ltl
+ * 功能: 创建一个文件组
+ * 参数:
+ * 返回值:
+ * 说明: 在/sys下创建一下目录，并在此目录新建文件
+ */
 int sysfs_create_group(struct kobject * kobj, 
 		       const struct attribute_group * grp)
 {
@@ -48,14 +53,14 @@ int sysfs_create_group(struct kobject * kobj,
 
 	BUG_ON(!kobj || !kobj->dentry);
 
-	if (grp->name) {
+	if (grp->name) { /* 创建目录 */
 		error = sysfs_create_subdir(kobj,grp->name,&dir);
 		if (error)
 			return error;
 	} else
 		dir = kobj->dentry;
 	dir = dget(dir);
-	if ((error = create_files(dir,grp))) {
+	if ((error = create_files(dir,grp))) { /* 创建文件 */
 		if (grp->name)
 			sysfs_remove_subdir(dir);
 	}

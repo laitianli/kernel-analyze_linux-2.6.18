@@ -38,7 +38,11 @@ static const int deadline_hash_shift = 5;
 						  2个FIFO队列，用列表实现，用来记录超时的请求
 						  1个Hash队列，用Hash实现，用来判定bio是否可以在request之后插入(ELEVATOR_BACK_MERGE)
 	这几个队列的作用可以参看deadline_merge.						 
-						
+	基本思路: (1) 确保每个请求在一个期限时间内得到服务。
+			(2) 读请求的期限短于写操作。
+			(3) 在期限时间内，将请求按扇区号重新排序，确保高效访问磁盘。
+	此算法关键两点: (1) 插入位置的选取。---使用Hash表选取后插，使用RBTree选取前插。
+				 (2) 派发请求的选取。---优先选择超时请求，再确保高效访问磁盘。
 */
 struct deadline_data {
 	/*
@@ -62,7 +66,7 @@ struct deadline_data {
 
 	/**/
 	unsigned int batching;		/* number of sequential requests made */
-	/**/
+	/* 记录一次请求的最后一个扇区号 */
 	sector_t last_sector;		/* head position */
 	unsigned int starved;		/* times reads have starved writes */
 
@@ -72,7 +76,7 @@ struct deadline_data {
 	int fifo_expire[2];
 	int fifo_batch;
 	int writes_starved;
-	int front_merges;
+	int front_merges; /* 允许向前合并 */
 
 	mempool_t *drq_pool;
 };
@@ -84,7 +88,7 @@ struct deadline_rq {
 	/*
 	 * rbtree index, key is the starting offset
 	 */
-	struct rb_node rb_node;
+	struct rb_node rb_node; /* 红黑树结点 */
 	/* 当发生了两个request合并的话，这个值记录的是合并之前的rb key */
 	sector_t rb_key; 
 	
@@ -93,12 +97,12 @@ struct deadline_rq {
 	/*
 	 * request hash, key is the ending offset (for back merge lookup)
 	 */
-	struct hlist_node hash;
+	struct hlist_node hash; /* hash结点 */
 
 	/*
 	 * expire fifo
 	 */
-	struct list_head fifo;
+	struct list_head fifo; /* FIFO结点 */
 	unsigned long expires;
 };
 
@@ -255,21 +259,21 @@ deadline_del_drq_rb(struct deadline_data *dd, struct deadline_rq *drq)
 {
 	const int data_dir = rq_data_dir(drq->request);
 
-	//如果下一次请求的地址就是当前要删除的request，则要重新找到drq的next地址，对next_drq赋值。
+	/* 如果下一次请求的地址就是当前要删除的request，则要重新找到drq的next地址，对next_drq赋值。*/
 	if (dd->next_drq[data_dir] == drq) {
-		struct rb_node *rbnext = rb_next(&drq->rb_node);//记录drq的后序结点
+		struct rb_node *rbnext = rb_next(&drq->rb_node);/* 记录drq的后序结点 */
 
 		dd->next_drq[data_dir] = NULL;
 		if (rbnext)
 			dd->next_drq[data_dir] = rb_entry_drq(rbnext);
 	}
 
-	BUG_ON(!RB_EMPTY_NODE(&drq->rb_node));//如果当前的request不在红黑树中(孤立节点)，则挂起系统
-	rb_erase(&drq->rb_node, DRQ_RB_ROOT(dd, drq));//从红黑树中删除节点
-	RB_CLEAR_NODE(&drq->rb_node);//设置node的父指针域指向自身
+	BUG_ON(!RB_EMPTY_NODE(&drq->rb_node));/* 如果当前的request不在红黑树中(孤立节点)，则挂起系统 */
+	rb_erase(&drq->rb_node, DRQ_RB_ROOT(dd, drq));/* 从红黑树中删除节点 */
+	RB_CLEAR_NODE(&drq->rb_node);/* 设置node的父指针域指向自身 */
 }
 /**ltl
-功能:根据起始扇区在排序队列中查找request
+功能:根据起始扇区在排序队列中查找request(先序)
 参数:dd	->调度器的私有数据地址
 	sector->请求的私有数据地址
 	data_dir->数据方向
@@ -327,6 +331,7 @@ deadline_find_first_drq(struct deadline_data *dd, int data_dir)
  * 参数:q	->请求队列指针
  *	rq	->要插入的请求对象
  * 返回值:
+ *	问题: 为什么在插入到Hash表中时，要判定request是否可以合并? 而插入RB和FIFO时不需要
  */
 static void
 deadline_add_request(struct request_queue *q, struct request *rq)
@@ -354,7 +359,7 @@ deadline_add_request(struct request_queue *q, struct request *rq)
  * 功能:从IO调度器删除request
  * 参数:q	->请求队列
  *	rq	->要删除的请求对象
- * 返回值:
+ * 返回值: 请求游离五个列表
  */
 static void deadline_remove_request(request_queue_t *q, struct request *rq)
 {
@@ -557,10 +562,10 @@ deadline_move_request(struct deadline_data *dd, struct deadline_rq *drq)
  * 1 otherwise. Requires !list_empty(&dd->fifo_list[data_dir])
  */
 /**ltl
-功能:判定FIFO队列的请求是否超时
-参数:dd	->IO调度器的私有数据
-	ddir	->读写方向
-*/
+ * 功能:判定FIFO队列的请求是否超时
+ * 参数:dd	->IO调度器的私有数据
+ *	ddir	->读写方向
+ */
 static inline int deadline_check_fifo(struct deadline_data *dd, int ddir)
 {
 	struct deadline_rq *drq = list_entry_fifo(dd->fifo_list[ddir].next);
@@ -568,7 +573,7 @@ static inline int deadline_check_fifo(struct deadline_data *dd, int ddir)
 	/*
 	 * drq is expired!
 	 */
-	if (time_after(jiffies, drq->expires))//时间比较
+	if (time_after(jiffies, drq->expires))/* 时间比较 */
 		return 1;
 
 	return 0;
@@ -842,7 +847,7 @@ deadline_set_request(request_queue_t *q, struct request *rq, struct bio *bio,
 
 		INIT_LIST_HEAD(&drq->fifo);
 
-		rq->elevator_private = drq;//请求request的私有数据
+		rq->elevator_private = drq;/* 请求request的私有数据 */
 		return 0;
 	}
 

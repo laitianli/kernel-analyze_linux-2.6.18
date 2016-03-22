@@ -376,7 +376,7 @@ int usb_submit_urb(struct urb *urb, gfp_t mem_flags)
 			temp >>= 1;
 		urb->interval = temp;
 	}
-
+	/* hcd_submit_urb */
 	return op->submit_urb (urb, mem_flags);
 }
 

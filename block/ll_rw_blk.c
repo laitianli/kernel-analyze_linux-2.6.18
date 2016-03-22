@@ -1532,7 +1532,7 @@ static int ll_back_merge_fn(request_queue_t *q, struct request *req,
 {
 	unsigned short max_sectors;
 	int len;
-	/*如果bio请求是发送给硬件设备的命令*/
+	/*如果bio请求是scsi命令*/
 	if (unlikely(blk_pc_request(req)))
 		/* 硬件设备限制一次request所能处理的扇区数量。在SCSI设备，这个值为512
 		   参见scsi_add_lun函数，对q->max_hw_sectors的设置		*/

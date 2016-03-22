@@ -1051,11 +1051,12 @@ EXPORT_SYMBOL(scsi_io_completion);
  *		BLKPREP_KILL if the failure is fatal
  */
 /**ltl
-功能:初始化scsi_cmnd各个域；1.如果请求是来自于SCSI层，且请求数据长度为0(TEST_UNIT_READY)，则直接赋值。
-					2.如果请求来自于用户进程或者是SCSI层，且请求数据长度大于0，为这个请求准备聚散列表(scatterlist)
-参数:cmnd	->
-返回值:0	->表示成功
-*/
+ * 功能:初始化scsi_cmnd各个域；1.如果请求是来自于SCSI层，且请求数据长度为0(TEST_UNIT_READY)，则直接赋值。
+ *					2.如果请求来自于用户进程或者是SCSI层，且请求数据长度大于0，为这个请求准备聚散列表(scatterlist)
+ * 参数:cmnd	->
+ * 返回值:0	->表示成功
+ * 说明: 对req->buffer要重新设置。若request是内部命令，则指向req->data; 若reqeust是fs命令，则直接置空。
+ */
 static int scsi_init_io(struct scsi_cmnd *cmd)
 {
 	struct request     *req = cmd->request;
@@ -1097,7 +1098,7 @@ static int scsi_init_io(struct scsi_cmnd *cmd)
 	cmd->request_bufflen = req->nr_sectors << 9;
 	if (blk_pc_request(req))//发送的是scsi命令，重设置长度
 		cmd->request_bufflen = req->data_len;
-	req->buffer = NULL;
+	req->buffer = NULL; /* 因为从磁盘读取通过DMA完成，因此不需要此域，将其置NULL */
 
 	/* 
 	 * Next, walk the list, and fill in the addresses and sizes of

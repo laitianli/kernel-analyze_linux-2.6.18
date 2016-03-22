@@ -212,7 +212,7 @@ static const u8 fs_rh_config_descriptor [] = {
  	0x02, 0x00, /*  __le16 ep_wMaxPacketSize; 1 + (MAX_ROOT_PORTS / 8) */
 	0xff        /*  __u8  ep_bInterval; (255ms -- usb 2.0 spec) */
 };
-
+/* USB root-hub配置、接口、端点的配置信息(usb2.0) */
 static const u8 hs_rh_config_descriptor [] = {
 
 	/* one configuration */
@@ -911,7 +911,7 @@ static int register_root_hub(struct usb_hcd *hcd)
 	//控制端口0的一个包最大传输大小
 	usb_dev->ep0.desc.wMaxPacketSize = __constant_cpu_to_le16(64);
 	
-	//获取USB根的描述符usb_device_descriptor
+	//获取USB根的描述符usb_device_descriptor(最终调用rh_call_control)
 	retval = usb_get_device_descriptor(usb_dev, USB_DT_DEVICE_SIZE);
 	if (retval != sizeof usb_dev->descriptor) {
 		mutex_unlock(&usb_bus_list_lock);
@@ -1867,11 +1867,11 @@ struct usb_hcd *usb_create_hcd (const struct hc_driver *driver,
 	hcd->self.controller = dev; //总线的控制器
 	hcd->self.bus_name = bus_name;
 	
-	/*用来轮循pci端口的状态*/
+	/*用来轮循root hub端口的状态*/
 	init_timer(&hcd->rh_timer);
 	hcd->rh_timer.function = rh_timer_func;
 	hcd->rh_timer.data = (unsigned long) hcd;
-	//控制器的驱动对象
+	/* 控制器的驱动对象(ehci_pci_hc_driver) */
 	hcd->driver = driver;
 	hcd->product_desc = (driver->product_desc) ? driver->product_desc :
 			"USB Host Controller";

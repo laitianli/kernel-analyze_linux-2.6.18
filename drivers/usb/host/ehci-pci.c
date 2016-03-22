@@ -72,6 +72,7 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 	int			retval;
 	//对ehci中的成员初始化
 	ehci->caps = hcd->regs;
+	/* 操作寄存器的起始地址 */
 	ehci->regs = hcd->regs + HC_LENGTH(readl(&ehci->caps->hc_capbase));
 	dbg_hcs_params(ehci, "reset");//reset hcs_params 0x200002 dbg=2 cc=0 pcc=0 ordered !ppc ports=2
 	dbg_hcc_params(ehci, "reset");//reset hcc_params 36881 caching frame 1024 64 bit addr
@@ -102,7 +103,7 @@ static int ehci_pci_setup(struct usb_hcd *hcd)
 
 	/* cache this readonly data; minimize chip reads */
 	ehci->hcs_params = readl(&ehci->caps->hcs_params);
-	//在没有初始化完成之后，要先禁用掉控制器
+	//在没有初始化完成之后，要先禁用掉控制器(挂起)
 	retval = ehci_halt(ehci);
 	if (retval)
 		return retval;

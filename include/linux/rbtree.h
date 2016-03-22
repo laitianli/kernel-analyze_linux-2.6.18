@@ -156,11 +156,11 @@ static inline void rb_set_color(struct rb_node *rb, int color)
 
 #define RB_ROOT	(struct rb_root) { NULL, }
 #define	rb_entry(ptr, type, member) container_of(ptr, type, member)
-//是否是空树
+/* 是否是空树 */
 #define RB_EMPTY_ROOT(root)	((root)->rb_node == NULL)
-//是否是孤立节点
+/* 是否是孤立节点 */
 #define RB_EMPTY_NODE(node)	(rb_parent(node) != node)
-//设置node为孤立节点
+/* 设置node为孤立节点 */
 #define RB_CLEAR_NODE(node)	(rb_set_parent(node, node))
 
 extern void rb_insert_color(struct rb_node *, struct rb_root *);

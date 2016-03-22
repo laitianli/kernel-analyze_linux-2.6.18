@@ -107,8 +107,7 @@ static int acpi_processor_ppc_notifier(struct notifier_block *nb,
 		goto out;
 
 	cpufreq_verify_within_limits(policy, 0,
-				     pr->performance->states[ppc].
-				     core_frequency * 1000);
+				     pr->performance->states[ppc].core_frequency * 1000);
 
       out:
 	mutex_unlock(&performance_mutex);
@@ -119,7 +118,12 @@ static int acpi_processor_ppc_notifier(struct notifier_block *nb,
 static struct notifier_block acpi_ppc_notifier_block = {
 	.notifier_call = acpi_processor_ppc_notifier,
 };
-
+/**ltl
+ * 功能: 获取_PPC对象
+ * 参数:
+ * 返回值:
+ * 说明: _PPC(performance percent capabilities), 此对象返回值值为一整数，表示P状态(_PSS对象返回)从第几个起有效
+ */
 static int acpi_processor_get_platform_limit(struct acpi_processor *pr)
 {
 	acpi_status status = 0;
@@ -147,20 +151,25 @@ static int acpi_processor_get_platform_limit(struct acpi_processor *pr)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 更新调度策略
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int acpi_processor_ppc_has_changed(struct acpi_processor *pr)
 {
 	int ret;
 	
 	if (ignore_ppc)
 		return 0;
-
+	/* 读取_PPC对象 */
 	ret = acpi_processor_get_platform_limit(pr);
 
 	if (ret < 0)
 		return (ret);
 	else
-		return cpufreq_update_policy(pr->id);
+		return cpufreq_update_policy(pr->id); /* 更新调度策略 */
 }
 
 void acpi_processor_ppc_init(void)
@@ -181,7 +190,15 @@ void acpi_processor_ppc_exit(void)
 
 	acpi_processor_ppc_status &= ~PPC_REGISTERED;
 }
-
+/**ltl
+ * 功能:读取_PCT对象
+ * 参数:
+ * 返回值:
+ * 说明: _PCT(performance control)此对象的作用是处理器用来改变performance state，当要切换状态时，只要将相应的值写入到control register
+ *             返回值包括两个寄存器地址:
+ *			control register->
+ *			status register->
+ */
 static int acpi_processor_get_performance_control(struct acpi_processor *pr)
 {
 	int result = 0;
@@ -243,7 +260,19 @@ static int acpi_processor_get_performance_control(struct acpi_processor *pr)
 
 	return result;
 }
-
+/**ltl
+ * 功能: 读取_PSS对象
+ * 参数:
+ * 返回值:
+ * 说明: _PSS(performance supports states) 用来表示当前processor所有的P state。此对象的返回值如下:
+ *				corefrequency->CPU operating frequency(MHZ).
+ *				power	-> maximun power dissipation
+ *				latency	-> 
+ *				busmasterlatency->
+ *				control	-> when want to change P state,write this value to PREF_CTRL register
+ *				status 	-> read the register PREF_STATUS,
+ *						   if the value equel to this value that the transition to the performance state was sucessful
+ */
 static int acpi_processor_get_performance_states(struct acpi_processor *pr)
 {
 	int result = 0;
@@ -270,7 +299,7 @@ static int acpi_processor_get_performance_states(struct acpi_processor *pr)
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Found %d performance states\n",
 			  pss->package.count));
-
+	/* P-state状态个数 */
 	pr->performance->state_count = pss->package.count;
 	pr->performance->states =
 	    kmalloc(sizeof(struct acpi_processor_px) * pss->package.count,
@@ -344,11 +373,11 @@ static int acpi_processor_get_performance_info(struct acpi_processor *pr)
 				  "ACPI-based processor performance control unavailable\n"));
 		return -ENODEV;
 	}
-
+	/* 读取_PCT对象(控制寄存器和状态寄存器) */
 	result = acpi_processor_get_performance_control(pr);
 	if (result)
 		return result;
-
+	/* 读取_PSS对象 */
 	result = acpi_processor_get_performance_states(pr);
 	if (result)
 		return result;
@@ -471,7 +500,12 @@ static int acpi_processor_perf_open_fs(struct inode *inode, struct file *file)
 	return single_open(file, acpi_processor_perf_seq_show,
 			   PDE(inode)->data);
 }
-
+/**ltl
+ * 功能: 文件/proc/acpi/processor/CPU1/performance写操作函数，主要用来改变cpu的性能，写入参数为cpu的状态下标。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static ssize_t
 acpi_processor_write_performance(struct file *file,
 				 const char __user * buffer,
@@ -497,24 +531,30 @@ acpi_processor_write_performance(struct file *file,
 		return -EFAULT;
 
 	state_string[count] = '\0';
-	new_state = simple_strtoul(state_string, NULL, 0);
+	new_state = simple_strtoul(state_string, NULL, 0); /* 新的性能状态 */
 
 	if (new_state >= perf->state_count)
 		return -EINVAL;
-
+	/* 获取cpu id对应的cpu调频策略对象 */
 	cpufreq_get_policy(&policy, pr->id);
-
+	/* cpu ID */
 	policy.cpu = pr->id;
+	/* 此调频策略对应的频率 */
 	policy.min = perf->states[new_state].core_frequency * 1000;
 	policy.max = perf->states[new_state].core_frequency * 1000;
-
+	/* 设置cpu的调频策略 */
 	result = cpufreq_set_policy(&policy);
 	if (result)
 		return result;
 
 	return count;
 }
-
+/**ltl
+ * 功能: 在目录/proc/acpi/processor/CPU1创建proformance文件
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void acpi_cpufreq_add_file(struct acpi_processor *pr)
 {
 	struct proc_dir_entry *entry = NULL;
@@ -779,7 +819,14 @@ err_out:
 }
 EXPORT_SYMBOL(acpi_processor_preregister_performance);
 
-
+/**ltl
+ * 功能: 对cpu的P-state初始化
+ * 参数: performane	->cpu性能对象
+ *		cpu		->cpu id
+ * 返回值:
+ * 说明: 1.读取_PCT和_PSS两个对象信息
+ *		2.创建文件/proc/acpi/processor/CPU1/proformance
+ */
 int
 acpi_processor_register_performance(struct acpi_processor_performance
 				    *performance, unsigned int cpu)
@@ -791,7 +838,7 @@ acpi_processor_register_performance(struct acpi_processor_performance
 		return -EINVAL;
 
 	mutex_lock(&performance_mutex);
-
+	/* acpi_process对象 */
 	pr = processors[cpu];
 	if (!pr) {
 		mutex_unlock(&performance_mutex);
@@ -805,14 +852,14 @@ acpi_processor_register_performance(struct acpi_processor_performance
 
 	WARN_ON(!performance);
 
-	pr->performance = performance;
-
+	pr->performance = performance; /* 设置cpu性能 */
+	/* 读取_PCT、_PSS两个对象信息 */
 	if (acpi_processor_get_performance_info(pr)) {
 		pr->performance = NULL;
 		mutex_unlock(&performance_mutex);
 		return -EIO;
 	}
-
+	/* 创建文件/proc/acpi/processor/CPU1/proformance */
 	acpi_cpufreq_add_file(pr);
 
 	mutex_unlock(&performance_mutex);

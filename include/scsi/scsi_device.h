@@ -47,7 +47,7 @@ enum scsi_device_state {
 
 struct scsi_device {
 	struct Scsi_Host *host;
-	struct request_queue *request_queue;
+	struct request_queue *request_queue; /* 设备的请求队列 */
 
 	/* the next two are protected by the host->host_lock */
 	struct list_head    siblings;   /* list of all devices on this host */

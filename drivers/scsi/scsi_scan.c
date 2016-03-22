@@ -1420,7 +1420,7 @@ static int scsi_report_lun_scan(struct scsi_target *starget, int bflags,
 功能:为scsi控制器扫描一个指定编号的scsi设备，编号为<channel:id:lun>
 参数:shost	->要扫描scsi设备的主机控制器
 	channel	->通道号
-	id		->目录节点号
+	id		->目标节点号
 	lun		->逻辑设备号
 	hostdata	->主机控制器的私有数据
 返回值:scsi设备对象

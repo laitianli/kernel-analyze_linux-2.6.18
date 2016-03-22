@@ -14,7 +14,7 @@
 /*********************************************************************
  *                     FREQUENCY TABLE HELPERS                       *
  *********************************************************************/
-
+/* 记录最大和最小的频率 */
 int cpufreq_frequency_table_cpuinfo(struct cpufreq_policy *policy,
 				    struct cpufreq_frequency_table *table)
 {
@@ -84,7 +84,19 @@ int cpufreq_frequency_table_verify(struct cpufreq_policy *policy,
 }
 EXPORT_SYMBOL_GPL(cpufreq_frequency_table_verify);
 
-
+/**ltl
+ * 功能: 获取目标频点在频点列表中对应数组下标
+ * 参数: policy	-> 调频率策略对象
+ *		table	-> 频率列表
+ *		target_freq-> 目标频点
+ *		relation	-> 关系，值可以是:CPUFREQ_RELATION_H、CPUFREQ_RELATION_L
+ *		index	-> [out] 目标频点在频点列表的下标
+ * 返回值: 
+ * 说明: 这个函数会根据target_freq和relation的值返回不同值:
+ *		1. 当target_freq值为0，relation=CPUFREQ_RELATION_H，则index=0
+ *						   relation=CPUFREQ_RELATION_L，则index=table最后一个元素的下标。
+ *		2. 当target_freq值属性频点列表，返回此频点的下标
+ */
 int cpufreq_frequency_table_target(struct cpufreq_policy *policy,
 				   struct cpufreq_frequency_table *table,
 				   unsigned int target_freq,
