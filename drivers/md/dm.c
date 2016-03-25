@@ -557,6 +557,7 @@ static struct bio *split_bvec(struct bio *bio, sector_t sector,
 	clone->bi_size = to_bytes(len);
 	clone->bi_io_vec->bv_offset = offset;
 	clone->bi_io_vec->bv_len = clone->bi_size;
+	clone->bi_private1 = bio->bi_private1;
 
 	return clone;
 }
@@ -576,6 +577,7 @@ static struct bio *clone_bio(struct bio *bio, sector_t sector,
 	clone->bi_vcnt = idx + bv_count;
 	clone->bi_size = to_bytes(len);
 	clone->bi_flags &= ~(1 << BIO_SEG_VALID);
+	clone->bi_private1 = bio->bi_private1;
 
 	return clone;
 }

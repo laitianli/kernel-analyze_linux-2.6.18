@@ -34,6 +34,8 @@
  */
 #include <scsi/scsi_cmnd.h>
 
+#include "encryption-request.h"
+
 static void blk_unplug_work(void *data);
 static void blk_unplug_timeout(unsigned long data);
 static void drive_stat_acct(struct request *rq, int nr_sectors, int new_io);
@@ -3432,6 +3434,8 @@ end_io:
 		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
 			goto end_io;
 
+		encryption_request(q, &bio);
+
 		/*
 		 * If this device has partitions, remap block n
 		 * of partition p to block n+start(p) of the disk.
@@ -3629,7 +3633,12 @@ static int __end_that_request_first(struct request *req, int uptodate,
 			req->bio = bio->bi_next;
 			nbytes = bio->bi_size;
 			if (!ordered_bio_endio(req, bio, nbytes, error))/* 是否是屏障IO */
+			{
+				if(blk_fs_request(req))
+					decryption_reuqest(req->q, bio);
+				
 				bio_endio(bio, nbytes, error);/* 处理普通IO请求的处理完成的处理函数 */
+			}
 			next_idx = 0;
 			bio_nbytes = 0;
 		} else {/* request承载的数据没有被处理完成，只是处理了bio中的部分bio_vec中的数据 */
@@ -3687,7 +3696,12 @@ static int __end_that_request_first(struct request *req, int uptodate,
 	 /* bio_nbytes是已经处理完成的数据长度 */
 	if (bio_nbytes) {
 		if (!ordered_bio_endio(req, bio, bio_nbytes, error))
+		{
+			if(blk_fs_request(req))
+				decryption_reuqest(req->q, bio);
+			
 			bio_endio(bio, bio_nbytes, error);/* 通道上层已经传输的长度 */
+		}
 		/* 更新bio中的成员值，因为后面要把此request对象放入请求队列中 */
 		bio->bi_idx += next_idx;
 		bio_iovec(bio)->bv_offset += nr_bytes;

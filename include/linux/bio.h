@@ -113,6 +113,7 @@ struct bio {
 	atomic_t		bi_cnt;		/* pin count */
 	/* bio私有数据(当此bio为反弹缓冲区时，用此指针保存原bio) */
 	void			*bi_private;
+	void			*bi_private1;
 
 	bio_destructor_t	*bi_destructor;	/* destructor */
 };
