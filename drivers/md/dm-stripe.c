@@ -15,20 +15,21 @@
 #define DM_MSG_PREFIX "striped"
 
 struct stripe {
-	struct dm_dev *dev;
-	sector_t physical_start;
+	struct dm_dev *dev; 	/* 低层设备对象 */
+	sector_t physical_start; /* 条带在低层设备的起始扇区 */
 };
 
 struct stripe_c {
-	uint32_t stripes;
+	uint32_t stripes;  /* 条带规则的设备数 */
 
 	/* The size of this target / num. stripes */
-	sector_t stripe_width;
+	sector_t stripe_width; /* 在多个低层设备按条带规则组成一目标设备时，一个低层设备中的扇区数 */
 
 	/* stripe chunk size */
+	/* size=(1<<n), chunk_shift=(1<<(n+1), chunk_mask=0x11...1, 即(1<<n - 1)) */
 	uint32_t chunk_shift;
 	sector_t chunk_mask;
-
+	/* 低层设备信息 */
 	struct stripe stripe[0];
 };
 
@@ -48,11 +49,21 @@ static inline struct stripe_c *alloc_context(unsigned int stripes)
 /*
  * Parse a single <dev> <sector> pair
  */
+/**ltl
+ * 功能: 获取每一条带信息
+ * 参数: ti	->目标设备
+ *		sc	->条带对象
+ *		stripe->条带数
+ *		argv	->[0] :条带设备路径或者<major:minor>
+ *			  [1] :低层设备的起始扇区号
+ * 返回值
+ * 说明:
+ */
 static int get_stripe(struct dm_target *ti, struct stripe_c *sc,
 		      unsigned int stripe, char **argv)
 {
 	unsigned long long start;
-
+	/* 低层设备的起始扇区号 */
 	if (sscanf(argv[1], "%llu", &start) != 1)
 		return -EINVAL;
 
@@ -83,13 +94,13 @@ static int stripe_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		ti->error = "Not enough arguments";
 		return -EINVAL;
 	}
-
+	/* 条带数 */
 	stripes = simple_strtoul(argv[0], &end, 10);
 	if (*end) {
 		ti->error = "Invalid stripe count";
 		return -EINVAL;
 	}
-
+	/* 一个chunk大小 */
 	chunk_size = simple_strtoul(argv[1], &end, 10);
 	if (*end) {
 		ti->error = "Invalid chunk_size";
@@ -110,7 +121,7 @@ static int stripe_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		    "chunk size";
 		return -EINVAL;
 	}
-
+	/* 映射目标的长度必须是条带数的整数倍 */
 	width = ti->len;
 	if (sector_div(width, stripes)) {
 		ti->error = "Target length not divisible by "
@@ -134,9 +145,9 @@ static int stripe_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		return -ENOMEM;
 	}
 
-	sc->stripes = stripes;
-	sc->stripe_width = width;
-	ti->split_io = chunk_size;
+	sc->stripes = stripes;/* 条带数 */
+	sc->stripe_width = width; 
+	ti->split_io = chunk_size;	/* chunk大小 */
 
 	sc->chunk_mask = ((sector_t) chunk_size) - 1;
 	for (sc->chunk_shift = 0; chunk_size; sc->chunk_shift++)
@@ -179,11 +190,11 @@ static int stripe_map(struct dm_target *ti, struct bio *bio,
 {
 	struct stripe_c *sc = (struct stripe_c *) ti->private;
 
-	sector_t offset = bio->bi_sector - ti->begin;
-	sector_t chunk = offset >> sc->chunk_shift;
-	uint32_t stripe = sector_div(chunk, sc->stripes);
+	sector_t offset = bio->bi_sector - ti->begin; /* 目标设备的起始扇区号 */
+	sector_t chunk = offset >> sc->chunk_shift; /* 在目标设备的第几个chunk */
+	uint32_t stripe = sector_div(chunk, sc->stripes); /* 此chunk号在哪一个条带 */
 
-	bio->bi_bdev = sc->stripe[stripe].dev->bdev;
+	bio->bi_bdev = sc->stripe[stripe].dev->bdev; /* 条带设备 */
 	bio->bi_sector = sc->stripe[stripe].physical_start +
 	    (chunk << sc->chunk_shift) + (offset & sc->chunk_mask);
 	return 1;

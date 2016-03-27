@@ -560,7 +560,12 @@ static int __dev_status(struct mapped_device *md, struct dm_ioctl *param)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 创建映射设备对象
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int dev_create(struct dm_ioctl *param, size_t param_size)
 {
 	int r, m = DM_ANY_MINOR;
@@ -572,11 +577,11 @@ static int dev_create(struct dm_ioctl *param, size_t param_size)
 
 	if (param->flags & DM_PERSISTENT_DEV_FLAG)
 		m = MINOR(huge_decode_dev(param->dev));
-
+	/* 分配映射设备对象 */
 	r = dm_create(m, &md);
 	if (r)
 		return r;
-
+	/* 插入到Hash表中 */
 	r = dm_hash_insert(param->name, *param->uuid ? param->uuid : NULL, md);
 	if (r) {
 		dm_put(md);
@@ -997,7 +1002,12 @@ static int next_target(struct dm_target_spec *last, uint32_t next, void *end,
 
 	return invalid_str(*target_params, end);
 }
-
+/**ltl
+ * 功能: 填充映射表
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int populate_table(struct dm_table *table,
 			  struct dm_ioctl *param, size_t param_size)
 {
@@ -1014,13 +1024,13 @@ static int populate_table(struct dm_table *table,
 	}
 
 	for (i = 0; i < param->target_count; i++) {
-
+		/* 解析此目标设备在映射设备的起始扇区号及长度，及映射目标类型 */
 		r = next_target(spec, next, end, &spec, &target_params);
 		if (r) {
 			DMWARN("unable to find target");
 			return r;
 		}
-
+		/* 添加映射目标 */
 		r = dm_table_add_target(table, spec->target_type,
 					(sector_t) spec->sector_start,
 					(sector_t) spec->length,
@@ -1032,21 +1042,26 @@ static int populate_table(struct dm_table *table,
 
 		next = spec->next;
 	}
-
+	/* 创建btree */
 	return dm_table_complete(table);
 }
-
+/**ltl
+ * 功能: 加载映射设备的映射表
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int table_load(struct dm_ioctl *param, size_t param_size)
 {
 	int r;
 	struct hash_cell *hc;
 	struct dm_table *t;
 	struct mapped_device *md;
-
+	/* 在Hash表中查找映射设备 */
 	md = find_device(param);
 	if (!md)
 		return -ENXIO;
-
+	/* 创建映射表对象 */
 	r = dm_table_create(&t, get_mode(param), param->target_count, md);
 	if (r)
 		goto out;
@@ -1279,14 +1294,14 @@ static ioctl_fn lookup_ioctl(unsigned int cmd)
 		{DM_REMOVE_ALL_CMD, remove_all},
 		{DM_LIST_DEVICES_CMD, list_devices},
 
-		{DM_DEV_CREATE_CMD, dev_create},
+		{DM_DEV_CREATE_CMD, dev_create},	/* 创建映射设备 */
 		{DM_DEV_REMOVE_CMD, dev_remove},
 		{DM_DEV_RENAME_CMD, dev_rename},
 		{DM_DEV_SUSPEND_CMD, dev_suspend},
 		{DM_DEV_STATUS_CMD, dev_status},
 		{DM_DEV_WAIT_CMD, dev_wait},
 
-		{DM_TABLE_LOAD_CMD, table_load},
+		{DM_TABLE_LOAD_CMD, table_load},	/* 加载映射表 */
 		{DM_TABLE_CLEAR_CMD, table_clear},
 		{DM_TABLE_DEPS_CMD, table_deps},
 		{DM_TABLE_STATUS_CMD, table_status},

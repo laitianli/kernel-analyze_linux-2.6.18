@@ -23,20 +23,22 @@
 #define NODE_SIZE L1_CACHE_BYTES
 #define KEYS_PER_NODE (NODE_SIZE / sizeof(sector_t))
 #define CHILDREN_PER_NODE (KEYS_PER_NODE + 1)
-
+/* 映射表,每个映射表包含一条或多条映射规则，每一条映射规则用映射目标(dm_target)来表示 */
 struct dm_table {
 	struct mapped_device *md;
 	atomic_t holders;
-
+	/* 与btree相关字段 */
 	/* btree table */
 	unsigned int depth;
 	unsigned int counts[MAX_DEPTH];	/* in nodes */
 	sector_t *index[MAX_DEPTH];
 
-	unsigned int num_targets;
-	unsigned int num_allocated;
+	unsigned int num_targets;	/* 映射目标数 */
+	unsigned int num_allocated;	/* 已经分配内存空间的映射目标数 */
+	/* 偏移数组指针，即此映射目标在此映射设备的最后一个扇区号 */
 	sector_t *highs;
-	struct dm_target *targets;
+	/* 映射目标数组指针 */
+	struct dm_target *targets;  
 
 	/*
 	 * Indicates the rw permissions for the new logical
@@ -44,7 +46,7 @@ struct dm_table {
 	 * and FMODE_WRITE.
 	 */
 	int mode;
-
+	/* 映射目标设备列表(/dev/sda、/dev/sdb...) */
 	/* a list of devices used by this table */
 	struct list_head devices;
 
@@ -179,12 +181,18 @@ void *dm_vcalloc(unsigned long nmemb, unsigned long elem_size)
  * highs, and targets are managed as dynamic arrays during a
  * table load.
  */
+/**ltl
+ * 功能: 分配映射目标在映射设备的偏移量数组及映射目标数组
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int alloc_targets(struct dm_table *t, unsigned int num)
 {
 	sector_t *n_highs;
 	struct dm_target *n_targets;
 	int n = t->num_targets;
-
+	/* 分配映射目标在映射设备的偏移量数组及映射目标数组 */
 	/*
 	 * Allocate both the target array and offset array at once.
 	 */
@@ -209,7 +217,12 @@ static int alloc_targets(struct dm_table *t, unsigned int num)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 分配映射表
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int dm_table_create(struct dm_table **result, int mode,
 		    unsigned num_targets, struct mapped_device *md)
 {
@@ -226,7 +239,7 @@ int dm_table_create(struct dm_table **result, int mode,
 		num_targets = KEYS_PER_NODE;
 
 	num_targets = dm_round_up(num_targets, KEYS_PER_NODE);
-
+	/* 分配映射目标数组 */
 	if (alloc_targets(t, num_targets)) {
 		kfree(t);
 		t = NULL;
@@ -347,6 +360,13 @@ static inline int check_space(struct dm_table *t)
 /*
  * Convert a device path to a dev_t.
  */
+/**ltl
+ * 功能: 根据设备路径获取设备号
+ * 参数: path	->设备路径
+ *		dev	->设备号
+ * 返回值:
+ * 说明:
+ */
 static int lookup_device(const char *path, dev_t *dev)
 {
 	int r;
@@ -391,6 +411,14 @@ static struct dm_dev *find_device(struct list_head *l, dev_t dev)
 /*
  * Open a device so we can use it as a map destination.
  */
+/**ltl
+ * 功能: 打开低层设备，并为其加断言
+ * 参数: d	->低层设备对象
+ *		dev	->设备号
+ *		md	->映射目标
+ * 返回值:
+ * 说明:
+ */
 static int open_dev(struct dm_dev *d, dev_t dev, struct mapped_device *md)
 {
 	static char *_claim_ptr = "I belong to device-mapper";
@@ -399,10 +427,11 @@ static int open_dev(struct dm_dev *d, dev_t dev, struct mapped_device *md)
 	int r;
 
 	BUG_ON(d->bdev);
-
+	/* 打开目标设备(会调用open接口) */
 	bdev = open_by_devnum(dev, d->mode);
 	if (IS_ERR(bdev))
 		return PTR_ERR(bdev);
+	/* 为目标设备加断言 */
 	r = bd_claim_by_disk(bdev, _claim_ptr, dm_disk(md));
 	if (r)
 		blkdev_put(bdev);
@@ -463,6 +492,18 @@ static int upgrade_mode(struct dm_dev *dd, int new_mode, struct mapped_device *m
  * Add a device to the list, or just increment the usage count if
  * it's already present.
  */
+/**ltl
+ * 功能: 将目标设备加入到列表中
+ * 参数: t	->映射表
+ *		ti	->映射目标
+ *		path	->映射目标<major:minor>
+ * 		start-> 映射目标相对低层设备的起始偏移量(类似磁盘分区的起始地址)
+ *		len	-> 此目标设备在dm设备的长度
+ *		mode	-> rw
+ *		result-> 底层设备对象
+ * 返回值:
+ * 说明:
+ */
 static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 			      const char *path, sector_t start, sector_t len,
 			      int mode, struct dm_dev **result)
@@ -473,7 +514,7 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 	unsigned int major, minor;
 
 	BUG_ON(!t);
-
+	/* 获取主设备号和次设备号 */
 	if (sscanf(path, "%u:%u", &major, &minor) == 2) {
 		/* Extract the major/minor numbers */
 		dev = MKDEV(major, minor);
@@ -481,10 +522,10 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 			return -EOVERFLOW;
 	} else {
 		/* convert the path to a device */
-		if ((r = lookup_device(path, &dev)))
+		if ((r = lookup_device(path, &dev))) /* 根据设备路径/dev/sdb获取<major:minor> */
 			return r;
 	}
-
+	/* 在列表中查找映射目标 */
 	dd = find_device(&t->devices, dev);
 	if (!dd) {
 		dd = kmalloc(sizeof(*dd), GFP_KERNEL);
@@ -493,15 +534,16 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 
 		dd->mode = mode;
 		dd->bdev = NULL;
-
+		/* 打开设备 */
 		if ((r = open_dev(dd, dev, t->md))) {
 			kfree(dd);
 			return r;
 		}
 
-		format_dev_t(dd->name, dev);
+		format_dev_t(dd->name, dev); /* 主设备号次设备号 */
 
 		atomic_set(&dd->count, 0);
+		/* 将目标设备插入到映射表中 */
 		list_add(&dd->list, &t->devices);
 
 	} else if (dd->mode != (mode | dd->mode)) {
@@ -510,7 +552,7 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 			return r;
 	}
 	atomic_inc(&dd->count);
-
+	/* 检查区域是否超过设备 */
 	if (!check_device_area(dd, start, len)) {
 		DMWARN("device %s too small for target", path);
 		dm_put_device(ti, dd);
@@ -522,10 +564,21 @@ static int __table_get_device(struct dm_table *t, struct dm_target *ti,
 	return 0;
 }
 
-
+/**ltl
+ * 功能: 根据目标设备<major:minor>和起始偏移量获取目标设备对象
+ * 参数: ti	-> 映射目标设备对象
+ *		path	-> <major:minor>
+ *		start->映射目标相对低层设备的起始偏移量
+ *		len	->此目标设备在dm设备的长度
+ *		mode	->rw
+ *		result->低层设备对象
+ * 返回值:
+ * 说明:
+ */
 int dm_get_device(struct dm_target *ti, const char *path, sector_t start,
 		  sector_t len, int mode, struct dm_dev **result)
 {
+	/* 初始化映射设备 */
 	int r = __table_get_device(ti->table, ti, path,
 				   start, len, mode, result);
 	if (!r) {
@@ -591,6 +644,7 @@ void dm_put_device(struct dm_target *ti, struct dm_dev *dd)
 /*
  * Checks to see if the target joins onto the end of the table.
  */
+/* 检查两个目标设备之前是否有gap */
 static int adjoin(struct dm_table *table, struct dm_target *ti)
 {
 	struct dm_target *prev;
@@ -702,7 +756,16 @@ static void check_for_valid_limits(struct io_restrictions *rs)
 	if (!rs->seg_boundary_mask)
 		rs->seg_boundary_mask = -1;
 }
-
+/**ltl
+ * 功能: 将映射目标添加到映射表中
+ * 参数: t	-> 映射表
+ *		type-> 映射目标类型名字
+ *		start-> 映射目标在映射设备的起始地址
+ *		len	-> 映射目标在映射设备的长度
+ *		params-> 
+ * 返回值:
+ * 说明:
+ */
 int dm_table_add_target(struct dm_table *t, const char *type,
 			sector_t start, sector_t len, char *params)
 {
@@ -712,7 +775,7 @@ int dm_table_add_target(struct dm_table *t, const char *type,
 
 	if ((r = check_space(t)))
 		return r;
-
+	/* 映射目标对象 */
 	tgt = t->targets + t->num_targets;
 	memset(tgt, 0, sizeof(*tgt));
 
@@ -720,7 +783,7 @@ int dm_table_add_target(struct dm_table *t, const char *type,
 		DMERR("%s: zero-length target", dm_device_name(t->md));
 		return -EINVAL;
 	}
-
+	/* 映射目标类型 */
 	tgt->type = dm_get_target_type(type);
 	if (!tgt->type) {
 		DMERR("%s: %s: unknown target type", dm_device_name(t->md),
@@ -728,15 +791,15 @@ int dm_table_add_target(struct dm_table *t, const char *type,
 		return -EINVAL;
 	}
 
-	tgt->table = t;
-	tgt->begin = start;
-	tgt->len = len;
+	tgt->table = t;	/* 映射表对象 */
+	tgt->begin = start; /* 映射目标在映射设备(dm)的起始地址 */
+	tgt->len = len; /* 映射目标的长度 */
 	tgt->error = "Unknown error";
 
 	/*
 	 * Does this target adjoin the previous one ?
 	 */
-	if (!adjoin(t, tgt)) {
+	if (!adjoin(t, tgt)) {/* 判定当前的映射目标与其前一个映射目标间是否有间隙 */
 		tgt->error = "Gap in table";
 		r = -EINVAL;
 		goto bad;
@@ -747,12 +810,12 @@ int dm_table_add_target(struct dm_table *t, const char *type,
 		tgt->error = "couldn't split parameters (insufficient memory)";
 		goto bad;
 	}
-
+	/* 通过<major:minor>获取目标设备，并将其插入到映射表中的devices列表中 */
 	r = tgt->type->ctr(tgt, argc, argv);
 	kfree(argv);
 	if (r)
 		goto bad;
-
+	/* 第num_targets个目标设备的最后扇区编号 */
 	t->highs[t->num_targets++] = tgt->begin + tgt->len - 1;
 
 	/* FIXME: the plan is to combine high here and then have
@@ -794,6 +857,12 @@ static int setup_indexes(struct dm_table *t)
 
 /*
  * Builds the btree to index the map.
+ */
+/**ltl
+ * 功能:为映射表创建btree
+ * 参数:
+ * 返回值:
+ * 说明:
  */
 int dm_table_complete(struct dm_table *t)
 {
@@ -844,7 +913,13 @@ sector_t dm_table_get_size(struct dm_table *t)
 {
 	return t->num_targets ? (t->highs[t->num_targets - 1] + 1) : 0;
 }
-
+/**ltl
+ * 功能: 根据数组下标获取目标设备
+ * 参数: t	-> 映射表
+ *		index->数组下标
+ * 返回值:
+ * 说明:
+ */
 struct dm_target *dm_table_get_target(struct dm_table *t, unsigned int index)
 {
 	if (index >= t->num_targets)
@@ -855,6 +930,13 @@ struct dm_target *dm_table_get_target(struct dm_table *t, unsigned int index)
 
 /*
  * Search the btree for the correct target.
+ */
+/**ltl
+ * 功能: 根据请求起始扇区查找到目标设备
+ * 参数: t	->映射表
+ *		sector->请求的起始扇区
+ * 返回值:
+ * 说明: 从btree找到目标设备
  */
 struct dm_target *dm_table_find_target(struct dm_table *t, sector_t sector)
 {
@@ -965,11 +1047,16 @@ int dm_table_any_congested(struct dm_table *t, int bdi_bits)
 
 	return r;
 }
-
+/**ltl
+ * 功能: "泄流"所有目标设备
+ * 参数: t -> 映射表
+ * 返回值:
+ * 说明:
+ */
 void dm_table_unplug_all(struct dm_table *t)
 {
 	struct list_head *d, *devices = dm_table_get_devices(t);
-
+	/* 遍历映射表中的所有目标设备 */
 	for (d = devices->next; d != devices; d = d->next) {
 		struct dm_dev *dd = list_entry(d, struct dm_dev, list);
 		request_queue_t *q = bdev_get_queue(dd->bdev);

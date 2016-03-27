@@ -58,9 +58,10 @@ struct buffer_head {
 	unsigned long b_state;		/* buffer state bitmap (see above) */
 	struct buffer_head *b_this_page;/* circular list of page's buffers */
 	struct page *b_page;		/* the page this bh is mapped to */
-
+	/* 请求的起始块号(块是相对于文件系统的块，而非磁盘中的块) */
 	sector_t b_blocknr;		/* start block number */
-	size_t b_size;			/* size of mapping */
+	/* 文件系统中每个一块的大小 */
+	size_t b_size;			/* size of mapping */ 
 	char *b_data;			/* pointer to data within the page */
 
 	struct block_device *b_bdev;

@@ -78,6 +78,7 @@ void dm_put_device(struct dm_target *ti, struct dm_dev *d);
 /*
  * Information about a target type
  */
+/* 映射目标类型: linear、strip... ，其值可为linear_target */
 struct target_type {
 	const char *name;
 	struct module *module;
@@ -102,14 +103,14 @@ struct io_restrictions {
 	unsigned long		seg_boundary_mask;
 	unsigned char		no_cluster; /* inverted so that 0 is default */
 };
-
+/* 映射目标 */
 struct dm_target {
 	struct dm_table *table;
-	struct target_type *type;
+	struct target_type *type;	/* 映射目标类型: linear, striped */
 
 	/* target limits */
-	sector_t begin;
-	sector_t len;
+	sector_t begin;	/* 此映射目标在映射设备(dm)起始扇区 */
+	sector_t len;	/* 此映射目标在映射设备(dm)长度 */
 
 	/* FIXME: turn this into a mask, and merge with io_restrictions */
 	/* Always a power of 2 */
@@ -122,7 +123,7 @@ struct dm_target {
 	struct io_restrictions limits;
 
 	/* target specific data */
-	void *private;
+	void *private; /* 此私有数据指向映射目标类型对象 */
 
 	/* Used to provide an error string from the ctr */
 	char *error;

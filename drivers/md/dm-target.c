@@ -59,7 +59,12 @@ static void load_module(const char *name)
 {
 	request_module("dm-%s", name);
 }
-
+/**ltl
+ * 功能: 根据映射目标名字获取映射目标对象
+ * 参数: name	->映射目标名字
+ * 返回值:
+ * 说明:
+ */
 struct target_type *dm_get_target_type(const char *name)
 {
 	struct tt_internal *ti = get_target_type(name);

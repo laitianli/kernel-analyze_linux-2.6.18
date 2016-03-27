@@ -138,8 +138,8 @@ struct dm_ioctl {
  * dm_ioctl.
  */
 struct dm_target_spec {
-	uint64_t sector_start;
-	uint64_t length;
+	uint64_t sector_start; /* 映射目标在映射设备的起始扇区号 */
+	uint64_t length;	/* 映射目标长度 */
 	int32_t status;		/* used when reading from kernel only */
 
 	/*
@@ -153,7 +153,7 @@ struct dm_target_spec {
 	 *   dm_target_spec.
 	 */
 	uint32_t next;
-
+	/* 映射目标类型 */
 	char target_type[DM_MAX_TYPE_NAME];
 
 	/*

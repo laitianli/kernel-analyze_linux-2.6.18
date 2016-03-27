@@ -2807,7 +2807,11 @@ int submit_bh(int rw, struct buffer_head * bh)
 	 */
 	 /*分配只含一个bio_vec对象的bio对象*/
 	bio = bio_alloc(GFP_NOIO, 1);
-	/*bio请求的起始扇区 Q:为什么这么计算??*/
+	/*bio请求的起始扇区 
+      * bh->b_blocknr: 表示请求的起始块号
+      * bh->bi_size: 文件系统中一个块的大小
+      * bh->bi_size >> 9: 文件系统中一个块有多少个扇区
+	 */
 	bio->bi_sector = bh->b_blocknr * (bh->b_size >> 9);
 	//bio请求所属设备
 	bio->bi_bdev = bh->b_bdev;//b_bdev域关联gendisk对象bd_disk,而在gendisk中就包括对磁盘的读写接口。
