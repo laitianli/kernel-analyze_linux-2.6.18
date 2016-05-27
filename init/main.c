@@ -316,7 +316,7 @@ __setup("rdinit=", rdinit_setup);
  * 功能: 
  * 参数:
  * 返回值:
- * 说明: 仅用于单处理器
+ * 说明: 仅用于单处理器(当CONFIG_SMP没有定义时)
  */
 static void __init smp_init(void)
 {
@@ -485,7 +485,10 @@ asmlinkage void __init start_kernel(void)
 	page_address_init();
 	printk(KERN_NOTICE);
 	printk(linux_banner);
-	setup_arch(&command_line);	/* 注:这个函数做了对ACPI模块与启动相关的操作 */
+	/* 注:这个函数做了对ACPI模块与启动相关的操作 
+      *    从MADT表中读取中lapic和ioapic信息
+	 */
+	setup_arch(&command_line);	
 	setup_per_cpu_areas();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
@@ -517,7 +520,7 @@ asmlinkage void __init start_kernel(void)
 	hrtimers_init();
 	softirq_init();
 	timekeeping_init();
-	time_init();
+	time_init(); /*  */
 	profile_init();
 	if (!irqs_disabled())
 		printk("start_kernel(): bug: interrupts were enabled early\n");

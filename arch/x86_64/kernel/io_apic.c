@@ -402,6 +402,12 @@ __setup("pirq=", ioapic_pirq_setup);
 /*
  * Find the IRQ entry number of a certain pin.
  */
+/**ltl
+ * 功能: 
+ * 参数:
+ * 返回值:
+ * 说明: 全局变量mp_irqs在函数mp_config_acpi_legacy_irqs中设置
+ */
 static int find_irq_entry(int apic, int pin, int type)
 {
 	int i;
@@ -786,14 +792,14 @@ static int pin_2_irq(int idx, int apic, int pin)
 	 */
 	if (mp_irqs[idx].mpc_dstirq != pin)
 		printk(KERN_ERR "broken BIOS or MPTABLE parser, ayiee!!\n");
-
+	/* mp_bus_id_to_type全局变量在mp_config_acpi_legacy_irqs()函数中设置 */
 	switch (mp_bus_id_to_type[bus])
 	{
 		case MP_BUS_ISA: /* ISA pin */
 		case MP_BUS_EISA:
 		case MP_BUS_MCA:
-		{
-			irq = mp_irqs[idx].mpc_srcbusirq;
+		{ /* 中断号 0~ 15*/
+			irq = mp_irqs[idx].mpc_srcbusirq; 
 			break;
 		}
 		case MP_BUS_PCI: /* PCI pin */	/* PCI设备 */
@@ -944,8 +950,8 @@ static void __init setup_IO_APIC_irqs(void)
 
 	apic_printk(APIC_VERBOSE, KERN_DEBUG "init IO_APIC IRQs\n");
 
-	for (apic = 0; apic < nr_ioapics; apic++) {
-	for (pin = 0; pin < nr_ioapic_registers[apic]; pin++) {
+	for (apic = 0; apic < nr_ioapics; apic++) {/*ioapic芯片编号*/
+	for (pin = 0; pin < nr_ioapic_registers[apic]; pin++) {/* ioapic芯片片内引脚编号 */
 
 		/*
 		 * add it to the IO-APIC irq-routing table:
@@ -992,7 +998,7 @@ static void __init setup_IO_APIC_irqs(void)
 		}
 		spin_lock_irqsave(&ioapic_lock, flags);
 		
-		/* 写入寄存器 */
+		/* 写入寄存器(对ioapic进行编程) */
 		io_apic_write(apic, 0x11+2*pin, *(((int *)&entry)+1));
 		io_apic_write(apic, 0x10+2*pin, *(((int *)&entry)+0));
 		set_native_irq_info(irq, TARGET_CPUS);
@@ -1180,145 +1186,7 @@ void __apicdebuginit print_IO_APIC(void)
 	return;
 }
 
-#if 0
-
-static __apicdebuginit void print_APIC_bitfield (int base)
-{
-	unsigned int v;
-	int i, j;
-
-	if (apic_verbosity == APIC_QUIET)
-		return;
-
-	printk(KERN_DEBUG "0123456789abcdef0123456789abcdef\n" KERN_DEBUG);
-	for (i = 0; i < 8; i++) {
-		v = apic_read(base + i*0x10);
-		for (j = 0; j < 32; j++) {
-			if (v & (1<<j))
-				printk("1");
-			else
-				printk("0");
-		}
-		printk("\n");
-	}
-}
-
-void __apicdebuginit print_local_APIC(void * dummy)
-{
-	unsigned int v, ver, maxlvt;
-
-	if (apic_verbosity == APIC_QUIET)
-		return;
-
-	printk("\n" KERN_DEBUG "printing local APIC contents on CPU#%d/%d:\n",
-		smp_processor_id(), hard_smp_processor_id());
-	v = apic_read(APIC_ID);
-	printk(KERN_INFO "... APIC ID:      %08x (%01x)\n", v, GET_APIC_ID(v));
-	v = apic_read(APIC_LVR);
-	printk(KERN_INFO "... APIC VERSION: %08x\n", v);
-	ver = GET_APIC_VERSION(v);
-	maxlvt = get_maxlvt();
-
-	v = apic_read(APIC_TASKPRI);
-	printk(KERN_DEBUG "... APIC TASKPRI: %08x (%02x)\n", v, v & APIC_TPRI_MASK);
-
-	v = apic_read(APIC_ARBPRI);
-	printk(KERN_DEBUG "... APIC ARBPRI: %08x (%02x)\n", v,
-		v & APIC_ARBPRI_MASK);
-	v = apic_read(APIC_PROCPRI);
-	printk(KERN_DEBUG "... APIC PROCPRI: %08x\n", v);
-
-	v = apic_read(APIC_EOI);
-	printk(KERN_DEBUG "... APIC EOI: %08x\n", v);
-	v = apic_read(APIC_RRR);
-	printk(KERN_DEBUG "... APIC RRR: %08x\n", v);
-	v = apic_read(APIC_LDR);
-	printk(KERN_DEBUG "... APIC LDR: %08x\n", v);
-	v = apic_read(APIC_DFR);
-	printk(KERN_DEBUG "... APIC DFR: %08x\n", v);
-	v = apic_read(APIC_SPIV);
-	printk(KERN_DEBUG "... APIC SPIV: %08x\n", v);
-
-	printk(KERN_DEBUG "... APIC ISR field:\n");
-	print_APIC_bitfield(APIC_ISR);
-	printk(KERN_DEBUG "... APIC TMR field:\n");
-	print_APIC_bitfield(APIC_TMR);
-	printk(KERN_DEBUG "... APIC IRR field:\n");
-	print_APIC_bitfield(APIC_IRR);
-
-	v = apic_read(APIC_ESR);
-	printk(KERN_DEBUG "... APIC ESR: %08x\n", v);
-
-	v = apic_read(APIC_ICR);
-	printk(KERN_DEBUG "... APIC ICR: %08x\n", v);
-	v = apic_read(APIC_ICR2);
-	printk(KERN_DEBUG "... APIC ICR2: %08x\n", v);
-
-	v = apic_read(APIC_LVTT);
-	printk(KERN_DEBUG "... APIC LVTT: %08x\n", v);
-
-	if (maxlvt > 3) {                       /* PC is LVT#4. */
-		v = apic_read(APIC_LVTPC);
-		printk(KERN_DEBUG "... APIC LVTPC: %08x\n", v);
-	}
-	v = apic_read(APIC_LVT0);
-	printk(KERN_DEBUG "... APIC LVT0: %08x\n", v);
-	v = apic_read(APIC_LVT1);
-	printk(KERN_DEBUG "... APIC LVT1: %08x\n", v);
-
-	if (maxlvt > 2) {			/* ERR is LVT#3. */
-		v = apic_read(APIC_LVTERR);
-		printk(KERN_DEBUG "... APIC LVTERR: %08x\n", v);
-	}
-
-	v = apic_read(APIC_TMICT);
-	printk(KERN_DEBUG "... APIC TMICT: %08x\n", v);
-	v = apic_read(APIC_TMCCT);
-	printk(KERN_DEBUG "... APIC TMCCT: %08x\n", v);
-	v = apic_read(APIC_TDCR);
-	printk(KERN_DEBUG "... APIC TDCR: %08x\n", v);
-	printk("\n");
-}
-
-void print_all_local_APICs (void)
-{
-	on_each_cpu(print_local_APIC, NULL, 1, 1);
-}
-
-void __apicdebuginit print_PIC(void)
-{
-	unsigned int v;
-	unsigned long flags;
-
-	if (apic_verbosity == APIC_QUIET)
-		return;
-
-	printk(KERN_DEBUG "\nprinting PIC contents\n");
-
-	spin_lock_irqsave(&i8259A_lock, flags);
-
-	v = inb(0xa1) << 8 | inb(0x21);
-	printk(KERN_DEBUG "... PIC  IMR: %04x\n", v);
-
-	v = inb(0xa0) << 8 | inb(0x20);
-	printk(KERN_DEBUG "... PIC  IRR: %04x\n", v);
-
-	outb(0x0b,0xa0);
-	outb(0x0b,0x20);
-	v = inb(0xa0) << 8 | inb(0x20);
-	outb(0x0a,0xa0);
-	outb(0x0a,0x20);
-
-	spin_unlock_irqrestore(&i8259A_lock, flags);
-
-	printk(KERN_DEBUG "... PIC  ISR: %04x\n", v);
-
-	v = inb(0x4d1) << 8 | inb(0x4d0);
-	printk(KERN_DEBUG "... PIC ELCR: %04x\n", v);
-}
-
-#endif  /*  0  */
-/**ltl
+/***ltl
  * 功能: 使能IO APIC
  * 参数:
  * 返回值:
@@ -2014,7 +1882,7 @@ __setup("no_timer_check", notimercheck);
  */
 #define PIC_IRQS	(1<<2)
 /**ltl
- * 功能: 使能ioapic
+ * 功能: 1.使能ioapic; 2.对io_apic进行编程
  * 参数:
  * 返回值:
  * 说明:
@@ -2037,7 +1905,7 @@ void __init setup_IO_APIC(void)
 	if (!acpi_ioapic)
 		setup_ioapic_ids_from_mpc();
 	sync_Arb_IDs();
-	/* 对IO-APIC的中断向量编程 */
+	/* 对IO-APIC的中断向量编程(主要是0~15号中断向量的编程) */
 	setup_IO_APIC_irqs();
 	
 	init_IO_APIC_traps();
@@ -2177,7 +2045,7 @@ int __init io_apic_get_redir_entries (int ioapic)
 }
 
 /**ltl
- * 功能: 根据ioapic芯片号、片内引脚号、GSI号与REDIR_TBL表建立一一对应关系
+ * 功能: 根据ioapic芯片号、片内引脚号、GSI号与REDIR_TBL表建立一一对应关系 (对ioapic进行编程)
  * 参数: ioapic	-> 在IOAPIC芯片组中，当前IOAPIC的芯片编号
  *		pin 		-> 芯片内部引脚号
  *		irq		-> GSI号

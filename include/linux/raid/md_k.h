@@ -46,21 +46,24 @@ typedef struct mdk_rdev_s mdk_rdev_t;
 /*
  * MD's 'extended' device
  */
+/* 成员磁盘 */
 struct mdk_rdev_s
 {
+	/* 连接件，用于插入到MD对象 */
 	struct list_head same_set;	/* RAID devices within the same set */
-
+	/* 成员磁盘大小 */
 	sector_t size;			/* Device size (in blocks) */
 	mddev_t *mddev;			/* RAID array if running */
 	unsigned long last_events;	/* IO event timestamp */
-
+	/* 成员磁盘的块设备描述符 */
 	struct block_device *bdev;	/* block device handle */
-
+	/* 此成员磁盘超级块的页面指针 */
 	struct page	*sb_page;
-	int		sb_loaded;
+	int		sb_loaded;	/* 1表示此raid超级块已经加载到内存中 */
 	__u64		sb_events;
 	sector_t	data_offset;	/* start of data in array */
-	sector_t	sb_offset;
+	sector_t	sb_offset; /* 超级块位置,也是成员磁盘可用的空间大小 */
+	/* 超级块字节数 */
 	int		sb_size;	/* bytes in the superblock */
 	int		preferred_minor;	/* autorun support */
 
@@ -106,14 +109,14 @@ struct mdk_rdev_s
 					   * in superblock.
 					   */
 };
-
+/* MD设备 */
 struct mddev_s
 {
-	void				*private;
-	struct mdk_personality		*pers;
+	void				*private;	/* 指向个性化数据指针 */
+	struct mdk_personality		*pers; /* 指几个性化操作的指针 */
 	dev_t				unit;
 	int				md_minor;
-	struct list_head 		disks;
+	struct list_head 		disks; /* 成员磁盘的链表头，连接件为mdk_rdev_s: same_set */
 	int				sb_dirty;
 	int				ro;
 
@@ -125,14 +128,15 @@ struct mddev_s
 	int				major_version,
 					minor_version,
 					patch_version;
-	int				persistent;
-	int				chunk_size;
+	int				persistent; /* MD设备是否有持久化超级块 */
+	int				chunk_size;	/* chunk大小 */
 	time_t				ctime, utime;
-	int				level, layout;
+	int				level, layout; /* level:raid级别， layout: raid布局 */
 	char				clevel[16];
-	int				raid_disks;
+	int				raid_disks;	/* MD成员磁盘数 */
 	int				max_disks;
 	sector_t			size; /* used size of component devices */
+	/* 成员磁盘空间总和 */
 	sector_t			array_size; /* exported array size */
 	__u64				events;
 
@@ -254,14 +258,16 @@ static inline void md_sync_acct(struct block_device *bdev, unsigned long nr_sect
 {
         atomic_add(nr_sectors, &bdev->bd_contains->bd_disk->sync_io);
 }
-
+/* MD个性 */
 struct mdk_personality
 {
-	char *name;
-	int level;
+	char *name; /* raid个性名称 */
+	int level;	/* raid个性级别 */
 	struct list_head list;
 	struct module *owner;
+	/* 个性化请求队列 */
 	int (*make_request)(request_queue_t *q, struct bio *bio);
+	/* 启动接口 */
 	int (*run)(mddev_t *mddev);
 	int (*stop)(mddev_t *mddev);
 	void (*status)(struct seq_file *seq, mddev_t *mddev);

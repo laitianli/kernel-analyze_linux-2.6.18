@@ -245,7 +245,7 @@ void unlink_gendisk(struct gendisk *disk)
 */
 struct gendisk *get_gendisk(dev_t dev, int *part)
 {
-	/*利用设备号dev从内核映像表中找出内核对象*/
+	/*利用设备号dev从内核映像表中找出内核对象(调用probe函数)*/
 	struct kobject *kobj = kobj_lookup(bdev_map, dev, part);
 	/*用kobj获取所在的结构体头指针*/
 	return  kobj ? to_disk(kobj) : NULL;

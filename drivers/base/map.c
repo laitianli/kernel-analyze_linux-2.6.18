@@ -133,7 +133,7 @@ retry:
 			continue;
 		}
 		mutex_unlock(domain->lock);
-		kobj = probe(dev, index, data);
+		kobj = probe(dev, index, data);/* µ÷ÓÃprobeº¯Êý(md_probe) */
 		/* Currently ->owner protects _only_ ->probe() itself. */
 		module_put(owner);
 		if (kobj)

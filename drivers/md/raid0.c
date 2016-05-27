@@ -60,7 +60,12 @@ static int raid0_issue_flush(request_queue_t *q, struct gendisk *disk,
 	return ret;
 }
 
-
+/**ltl
+ * 功能: 创建条带空间
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int create_strip_zones (mddev_t *mddev)
 {
 	int i, c, j;
@@ -77,7 +82,7 @@ static int create_strip_zones (mddev_t *mddev)
 	 * The number of 'same size groups'
 	 */
 	conf->nr_strip_zones = 0;
- 
+ 	/* 计算条带数 */
 	ITERATE_RDEV(mddev,rdev1,tmp1) {
 		printk("raid0: looking at %s\n",
 			bdevname(rdev1->bdev,b));
@@ -107,18 +112,19 @@ static int create_strip_zones (mddev_t *mddev)
 		}
 		if (!c) {
 			printk("raid0:   ==> UNIQUE\n");
-			conf->nr_strip_zones++;
+			conf->nr_strip_zones++; /* 计算出条带数 */
 			printk("raid0: %d zones\n", conf->nr_strip_zones);
 		}
 	}
 	printk("raid0: FINAL %d zones\n", conf->nr_strip_zones);
-
+	/* 分配条带区域数组空间 */
 	conf->strip_zone = kzalloc(sizeof(struct strip_zone)*
 				conf->nr_strip_zones, GFP_KERNEL);
 	if (!conf->strip_zone)
 		return 1;
+	/* 分配成员磁盘数 */
 	conf->devlist = kzalloc(sizeof(mdk_rdev_t*)*
-				conf->nr_strip_zones*mddev->raid_disks,
+				conf->nr_strip_zones * mddev->raid_disks,
 				GFP_KERNEL);
 	if (!conf->devlist)
 		return 1;
@@ -126,6 +132,7 @@ static int create_strip_zones (mddev_t *mddev)
 	/* The first zone must contain all devices, so here we check that
 	 * there is a proper alignment of slots to devices and find them all
 	 */
+	/* 第一个条带区域必须包含所有的设备 */
 	zone = &conf->strip_zone[0];
 	cnt = 0;
 	smallest = NULL;
@@ -156,7 +163,7 @@ static int create_strip_zones (mddev_t *mddev)
 			blk_queue_max_sectors(mddev->queue, PAGE_SIZE>>9);
 
 		if (!smallest || (rdev1->size <smallest->size))
-			smallest = rdev1;
+			smallest = rdev1; /* 标记空间最小的成员磁盘 */
 		cnt++;
 	}
 	if (cnt != mddev->raid_disks) {
@@ -164,33 +171,36 @@ static int create_strip_zones (mddev_t *mddev)
 			cnt, mddev->raid_disks);
 		goto abort;
 	}
-	zone->nb_dev = cnt;
-	zone->size = smallest->size * cnt;
-	zone->zone_offset = 0;
-
+	zone->nb_dev = cnt; /* 条带区域的设备数 */
+	zone->size = smallest->size * cnt; /* 条带区域大小 */
+	zone->zone_offset = 0; /* 第一条带区域的偏移 */
+	/* 当前的偏移量 */
 	current_offset = smallest->size;
+	/* 条带区域偏移 */
 	curr_zone_offset = zone->size;
 
 	/* now do the other zones */
 	for (i = 1; i < conf->nr_strip_zones; i++)
 	{
-		zone = conf->strip_zone + i;
+		zone = conf->strip_zone + i; /* 第i条带区域 */
+		/* 第i条带区域的起始成员磁盘地址 */
 		zone->dev = conf->strip_zone[i-1].dev + mddev->raid_disks;
 
 		printk("raid0: zone %d\n", i);
 		zone->dev_offset = current_offset;
-		smallest = NULL;
+		smallest = NULL; /* 重置 */
 		c = 0;
-
+		/* 查找第i条带区域成员磁盘对象 */
 		for (j=0; j<cnt; j++) {
 			char b[BDEVNAME_SIZE];
-			rdev = conf->strip_zone[0].dev[j];
+			rdev = conf->strip_zone[0].dev[j]; /* 因为第0条带区域包含所有的成员磁盘 */
 			printk("raid0: checking %s ...", bdevname(rdev->bdev,b));
 			if (rdev->size > current_offset)
 			{
 				printk(" contained as device %d\n", c);
-				zone->dev[c] = rdev;
+				zone->dev[c] = rdev; /* 设置成员磁盘 */
 				c++;
+				/* 重新设备smallest的成员磁盘 */
 				if (!smallest || (rdev->size <smallest->size)) {
 					smallest = rdev;
 					printk("  (%llu) is smallest!.\n", 
@@ -200,14 +210,15 @@ static int create_strip_zones (mddev_t *mddev)
 				printk(" nope.\n");
 		}
 
-		zone->nb_dev = c;
+		zone->nb_dev = c; /* 第i条带区域的成员磁盘数 */
+		/* 第i条带区域大小 */
 		zone->size = (smallest->size - current_offset) * c;
 		printk("raid0: zone->nb_dev: %d, size: %llu\n",
 			zone->nb_dev, (unsigned long long)zone->size);
-
+		/* 第i条带区域偏移量 */
 		zone->zone_offset = curr_zone_offset;
-		curr_zone_offset += zone->size;
-
+		curr_zone_offset += zone->size; /* 第i+1条带区域偏移量 */
+		
 		current_offset = smallest->size;
 		printk("raid0: current zone offset: %llu\n",
 			(unsigned long long)current_offset);
@@ -232,9 +243,9 @@ static int create_strip_zones (mddev_t *mddev)
 		if (sz >= min_spacing && sz < conf->hash_spacing)
 			conf->hash_spacing = sz;
 	}
-
+	/* 设置"泄流"接口 */
 	mddev->queue->unplug_fn = raid0_unplug;
-
+	/* 设置"刷新"接口 */
 	mddev->queue->issue_flush_fn = raid0_issue_flush;
 
 	printk("raid0: done.\n");
@@ -283,9 +294,9 @@ static int raid0_run (mddev_t *mddev)
 	       mdname(mddev),
 	       mddev->chunk_size >> 9,
 	       (mddev->chunk_size>>1)-1);
-	blk_queue_max_sectors(mddev->queue, mddev->chunk_size >> 9);
+	blk_queue_max_sectors(mddev->queue, mddev->chunk_size >> 9);/* 一次请求的最大扇区数 */
 	blk_queue_segment_boundary(mddev->queue, (mddev->chunk_size>>1) - 1);
-
+	/* raid0私有数据 */
 	conf = kmalloc(sizeof (raid0_conf_t), GFP_KERNEL);
 	if (!conf)
 		goto out;
@@ -293,9 +304,11 @@ static int raid0_run (mddev_t *mddev)
  
 	conf->strip_zone = NULL;
 	conf->devlist = NULL;
+	/* 创建条带空间 */
 	if (create_strip_zones (mddev)) 
 		goto out_free_conf;
-
+	
+	/* 计算成员磁盘空间总和 */
 	/* calculate array device size */
 	mddev->array_size = 0;
 	ITERATE_RDEV(mddev,rdev,tmp)
@@ -411,11 +424,11 @@ static int raid0_make_request (request_queue_t *q, struct bio *bio)
 	disk_stat_add(mddev->gendisk, sectors[rw], bio_sectors(bio));
 
 	chunk_size = mddev->chunk_size >> 10;
-	chunk_sects = mddev->chunk_size >> 9;
+	chunk_sects = mddev->chunk_size >> 9; /* 一个chunk的扇区数 */
 	chunksize_bits = ffz(~chunk_size);
-	block = bio->bi_sector >> 1;
+	block = bio->bi_sector >> 1; /* 为什么? */
 	
-
+	/* 请求的最后一个扇区大于一个chunk */
 	if (unlikely(chunk_sects < (bio->bi_sector & (chunk_sects - 1)) + (bio->bi_size >> 9))) {
 		struct bio_pair *bp;
 		/* Sanity check -- queue functions should prevent this happening */
@@ -425,6 +438,7 @@ static int raid0_make_request (request_queue_t *q, struct bio *bio)
 		/* This is a one page bio that upper layers
 		 * refuse to split for us, so we need to split it.
 		 */
+		/* 分割此请求 */
 		bp = bio_split(bio, bio_split_pool, chunk_sects - (bio->bi_sector & (chunk_sects - 1)) );
 		if (raid0_make_request(q, &bp->bio1))
 			generic_make_request(&bp->bio1);

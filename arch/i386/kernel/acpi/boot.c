@@ -68,7 +68,7 @@ int acpi_pci_disabled __initdata;	/* skip ACPI PCI scan and IRQ initialization *
 int acpi_ht __initdata = 1;	/* enable HT */
 
 int acpi_lapic;	/* 是否解析到local apic信息(ACPI模块解析到MADT表时设置此值) */
-int acpi_ioapic;
+int acpi_ioapic;/* 是否解析到IO apic信息(ACPI模块解析到MADT表时设置此值) */
 int acpi_strict;
 EXPORT_SYMBOL(acpi_strict);
 
@@ -484,7 +484,7 @@ int acpi_gsi_to_irq(u32 gsi, unsigned int *irq)
  * failure: return < 0
  */
 /**ltl
- * 功能:将GSI号转化成系统软件可以使用的irq号
+ * 功能: 将GSI号转化成系统软件可以使用的irq号，同时对ioapic进行编程
  * 参数:	gsi			->GSI事情
  *		triggering	->中断触发方式(低电平触发方式/边缘触发方式)
  *		polarity		->采用电平触发时的极性(PCI设备使用低电平触发方式)
@@ -898,9 +898,10 @@ static void __init acpi_process_madt(void)
 		/*
 		 * Parse MADT LAPIC entries
 		 */
+		/* 解析local apic */
 		error = acpi_parse_madt_lapic_entries();
 		if (!error) {
-			acpi_lapic = 1;
+			acpi_lapic = 1; /* 已经解析到LAPIC */
 
 #ifdef CONFIG_X86_GENERICARCH
 			generic_bigsmp_probe();
@@ -913,7 +914,7 @@ static void __init acpi_process_madt(void)
 			if (!error) {
 				acpi_irq_model = ACPI_IRQ_MODEL_IOAPIC;
 				acpi_irq_balance_set(NULL);
-				acpi_ioapic = 1;
+				acpi_ioapic = 1; /* 已经解析到IOAPIC */
 
 				smp_found_config = 1;
 				clustered_apic_check();
@@ -1167,7 +1168,7 @@ static struct dmi_system_id __initdata acpi_dmi_table[] = {
  *	!0: failure
  */
 /**ltl
- * 功能: 针对i386平台，acpi表的初步解析
+ * 功能: acpi表的初步解析
  * 参数:
  * 返回值:
  * 说明:主ACPI表的物理地址存在到全局变量sdt_entry中
@@ -1243,7 +1244,7 @@ int __init acpi_boot_init(void)
 	 */
  	/* 解析MADT表，并设置Local APIC和IO APIC */
 	acpi_process_madt();
-	/* 解析帮助信息表 */
+	/* 解析高精度定时器表 */
 	acpi_table_parse(ACPI_HPET, acpi_parse_hpet);
 
 	return 0;

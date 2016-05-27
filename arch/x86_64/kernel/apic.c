@@ -649,7 +649,12 @@ static int __init detect_init_APIC (void)
 	boot_cpu_id = 0;
 	return 0;
 }
-
+/**ltl
+ * 功能: local apic和io apic固定映射
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void __init init_apic_mappings(void)
 {
 	unsigned long apic_phys;

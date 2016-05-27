@@ -106,12 +106,12 @@ void __init clustered_apic_check(void)
 	if (clusters <= 1 && max_cluster <= 8 && cluster_cnt[0] == max_cluster) {
 #ifdef CONFIG_HOTPLUG_CPU
 		/* Don't use APIC shortcuts in CPU hotplug to avoid races */
-		genapic = &apic_physflat;
+		genapic = &apic_physflat; /* 旧机器使用此 */
 #else
 		genapic = &apic_flat;
 #endif
 	} else
-		genapic = &apic_cluster;
+		genapic = &apic_cluster; /* 负载均衡器使用此 */
 
 print:/* Setting APIC routing to physical flat */
 	printk(KERN_INFO "Setting APIC routing to %s\n", genapic->name); /* physical flat*/

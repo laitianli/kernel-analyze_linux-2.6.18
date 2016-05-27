@@ -341,7 +341,7 @@ acpi_pci_irq_lookup(struct pci_bus *bus,
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 			  "Searching for PRT entry for %02x:%02x:%02x[%c]\n",
 			  segment, bus_nr, device, ('A' + pin)));
-	/* 根据<域:总线号>获取entry */
+	/* 根据<域:总线号:设备号>获取entry */
 	entry = acpi_pci_irq_find_prt_entry(segment, bus_nr, device, pin);
 	if (!entry) {
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO, "PRT entry not found\n"));
@@ -433,7 +433,7 @@ int acpi_pci_irq_enable(struct pci_dev *dev)
 
 	if (!dev)
 		return -EINVAL;
-
+	/* 从pci配置interrupt pin里读出的引脚号 */
 	pin = dev->pin;
 	if (!pin) {
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO,

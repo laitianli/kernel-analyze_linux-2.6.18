@@ -1079,7 +1079,7 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 	current_cpu_data = boot_cpu_data;
 	current_thread_info()->cpu = 0;  /* needed? */
 	set_cpu_sibling_map(0);
-
+	/* 校验是否支持smp */
 	if (smp_sanity_check(max_cpus) < 0) {
 		printk(KERN_INFO "SMP disabled\n");
 		disable_smp();

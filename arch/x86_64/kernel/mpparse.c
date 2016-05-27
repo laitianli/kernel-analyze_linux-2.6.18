@@ -32,7 +32,7 @@
 #include <asm/acpi.h>
 
 /* Have we found an MP table */
-int smp_found_config;	/* 是否找到SMP的config */
+int smp_found_config;	/* 在特定的内存区域内是否找到SMP的config */
 unsigned int __initdata maxcpus = NR_CPUS;
 
 int acpi_found_madt;
@@ -50,7 +50,7 @@ int mp_bus_id_to_pci_bus [MAX_MP_BUSSES] = { [0 ... MAX_MP_BUSSES-1] = -1 };
 static int mp_current_pci_id = 0;
 /* I/O APIC entries */
 struct mpc_config_ioapic mp_ioapics[MAX_IO_APICS]; /* ioapic表 */
-
+/* 中断信息，包括(0~15)及ioapic */
 /* # of MP IRQ source entries */
 struct mpc_config_intsrc mp_irqs[MAX_IRQ_SOURCES];
 
@@ -176,8 +176,10 @@ static void __cpuinit MP_processor_info (struct mpc_config_processor *m)
 		cpu = 0;
  	}
 	bios_cpu_apicid[cpu] = m->mpc_apicid;
+	
+	/* 设置cpu对应的apic id */
 	x86_cpu_to_apicid[cpu] = m->mpc_apicid;
-
+	/* 设置cpu映射表 */
 	cpu_set(cpu, cpu_possible_map);
 	cpu_set(cpu, cpu_present_map);
 }
@@ -314,6 +316,7 @@ static void __init MP_lintsrc_info (struct mpc_config_lintsrc *m)
  *					3.ioapic config (per ioapic)
  *					4.int config(per bus interrupt source)
  *					5.MP_LINTSRC config (per system interrup source)
+ *      只有acpi模块关闭时，才会执行些流程。
  */
 static int __init smp_read_mpc(struct mp_config_table *mpc)
 {
@@ -584,7 +587,9 @@ static struct intel_mp_floating *mpf_found;
  * 功能: 读取SMP配置信息
  * 参数:
  * 返回值:
- * 说明: 配置信息包括:CPU config、bus config、ioacpi config、int config、lint config
+ * 说明: 1.配置信息包括:CPU config、bus config、ioacpi config、int config、lint config
+ *       2.当从MADT表中解析到LAPIC和IOAPIC，则不用再去解析
+ *	    3.当acpi模块关闭时才会执行此流程
  */
 void __init get_smp_config (void)
 {
@@ -594,6 +599,7 @@ void __init get_smp_config (void)
  	 * ACPI supports both logical (e.g. Hyper-Threading) and physical 
  	 * processors, where MPS only supports physical.
  	 */
+ 	/* 已经从ACPI表MADT中解析到LAPIC和IOAPIC，则不用再去解析配置 */
  	if (acpi_lapic && acpi_ioapic) {
  		printk(KERN_INFO "Using ACPI (MADT) for SMP configuration information\n");
  		return;
@@ -945,7 +951,12 @@ void __init mp_override_legacy_irq (
 	return;
 }
 
-
+/**ltl
+ * 功能:  设置全局变量的mp_irqs
+ * 参数:
+ * 返回值:
+ * 说明: 总线类型为MP_ISA_BUS(表示传统的中断)
+ */
 void __init mp_config_acpi_legacy_irqs (void)
 {
 	struct mpc_config_intsrc intsrc;

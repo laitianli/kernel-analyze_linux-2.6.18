@@ -983,6 +983,7 @@ do_open(struct block_device *bdev, struct file *file, unsigned int subclass)
 	lock_kernel();
 	
 	/*根据设备号从内核映射表中获取内核对象gendisk,part输出变量，表示当前块设备的分区号*/
+	/* 在这里会调用probe接口，(MD设备就是通过这个函数里去调用md_probe函数) */
 	disk = get_gendisk(bdev->bd_dev, &part);
 	if (!disk) {
 		unlock_kernel();

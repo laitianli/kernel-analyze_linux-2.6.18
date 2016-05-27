@@ -326,7 +326,12 @@ static mdk_rdev_t * find_rdev(mddev_t * mddev, dev_t dev)
 	}
 	return NULL;
 }
-
+/**ltl
+ * 功能: 获取MD个性
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static struct mdk_personality *find_pers(int level, char *clevel)
 {
 	struct mdk_personality *pers;
@@ -338,13 +343,13 @@ static struct mdk_personality *find_pers(int level, char *clevel)
 	}
 	return NULL;
 }
-
+/* 获取成员磁盘的超级块位置 */
 static inline sector_t calc_dev_sboffset(struct block_device *bdev)
 {
 	sector_t size = bdev->bd_inode->i_size >> BLOCK_SIZE_BITS;
-	return MD_NEW_SIZE_BLOCKS(size);
+	return MD_NEW_SIZE_BLOCKS(size); /* 超级块位置 */
 }
-
+/* 计算成员磁盘大小，必须以chunk_size对齐 */
 static sector_t calc_dev_size(mdk_rdev_t *rdev, unsigned chunk_size)
 {
 	sector_t size;
@@ -355,7 +360,7 @@ static sector_t calc_dev_size(mdk_rdev_t *rdev, unsigned chunk_size)
 		size &= ~((sector_t)chunk_size/1024 - 1);
 	return size;
 }
-
+/* 分配成员磁盘超级块页面 */
 static int alloc_disk_sb(mdk_rdev_t * rdev)
 {
 	if (rdev->sb_page)
@@ -515,7 +520,7 @@ int sync_page_io(struct block_device *bdev, sector_t sector, int size,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(sync_page_io);
-
+/* 读取成员磁盘的超级块信息  */
 static int read_disk_sb(mdk_rdev_t * rdev, int size)
 {
 	char b[BDEVNAME_SIZE];
@@ -526,10 +531,10 @@ static int read_disk_sb(mdk_rdev_t * rdev, int size)
 	if (rdev->sb_loaded)
 		return 0;
 
-
+	/* 向块设备层提交请求 */
 	if (!sync_page_io(rdev->bdev, rdev->sb_offset<<1, size, rdev->sb_page, READ))
 		goto fail;
-	rdev->sb_loaded = 1;
+	rdev->sb_loaded = 1;/* 超级块已经加载 */
 	return 0;
 
 fail:
@@ -651,15 +656,17 @@ static int super_90_load(mdk_rdev_t *rdev, mdk_rdev_t *refdev, int minor_version
 	 *
 	 * It also happens to be a multiple of 4Kb.
 	 */
+	 /* 计算超级块在成员磁盘的位置 */
 	sb_offset = calc_dev_sboffset(rdev->bdev);
 	rdev->sb_offset = sb_offset;
-
+	/* 读取超级块(4K) */
 	ret = read_disk_sb(rdev, MD_SB_BYTES);
 	if (ret) return ret;
 
 	ret = -EINVAL;
 
 	bdevname(rdev->bdev, b);
+	/* RAID超级块信息 */
 	sb = (mdp_super_t*)page_address(rdev->sb_page);
 
 	if (sb->md_magic != MD_SB_MAGIC) {
@@ -676,10 +683,10 @@ static int super_90_load(mdk_rdev_t *rdev, mdk_rdev_t *refdev, int minor_version
 			b);
 		goto abort;
 	}
-
+	/* 成员磁盘数 */
 	if (sb->raid_disks <= 0)
 		goto abort;
-
+	/* 效验checksum */
 	if (csum_fold(calc_sb_csum(sb)) != csum_fold(sb->sb_csum)) {
 		printk(KERN_WARNING "md: invalid superblock checksum on %s\n",
 			b);
@@ -718,6 +725,7 @@ static int super_90_load(mdk_rdev_t *rdev, mdk_rdev_t *refdev, int minor_version
 		else 
 			ret = 0;
 	}
+	/* 计算成员磁盘大小 */
 	rdev->size = calc_dev_size(rdev, sb->chunk_size);
 
 	if (rdev->size < sb->size && sb->level > 1)
@@ -1317,7 +1325,13 @@ static int match_mddev_units(mddev_t *mddev1, mddev_t *mddev2)
 }
 
 static LIST_HEAD(pending_raid_disks);
-
+/**ltl
+ * 功能: 将导入的成员磁盘插入到MD设备号
+ * 参数: rdev	->成员磁盘对象
+ *		mmdev->MD设备对象
+ * 返回值:
+ * 说明:
+ */
 static int bind_rdev_to_array(mdk_rdev_t * rdev, mddev_t * mddev)
 {
 	mdk_rdev_t *same_pdev;
@@ -1365,7 +1379,7 @@ static int bind_rdev_to_array(mdk_rdev_t * rdev, mddev_t * mddev)
 		return -ENOMEM;
 	while ( (s=strchr(rdev->kobj.k_name, '/')) != NULL)
 		*s = '!';
-			
+	/* 将成员磁盘插入列表中 */		
 	list_add(&rdev->same_set, &mddev->disks);
 	rdev->mddev = mddev;
 	printk(KERN_INFO "md: bind<%s>\n", b);
@@ -1378,7 +1392,7 @@ static int bind_rdev_to_array(mdk_rdev_t * rdev, mddev_t * mddev)
 	else
 		ko = &rdev->bdev->bd_disk->kobj;
 	sysfs_create_link(&rdev->kobj, ko, "block");
-	bd_claim_by_disk(rdev->bdev, rdev, mddev->gendisk);
+	bd_claim_by_disk(rdev->bdev, rdev, mddev->gendisk);/* 断言成员磁盘 */
 	return 0;
 }
 
@@ -1969,6 +1983,12 @@ static struct kobj_type rdev_ktype = {
  *
  * a faulty rdev _never_ has rdev->sb set.
  */
+/**ltl
+ * 功能: 从成员磁盘中导出MD设备的超级块
+ * 参数:
+ * 返回值:
+ * 说明: 如果raid超级块需要持续化，则它被保存在RAID集合中的每个成员磁盘的尾部。占用4K，但在磁盘中预留64K
+ */
 static mdk_rdev_t *md_import_device(dev_t newdev, int super_format, int super_minor)
 {
 	char b[BDEVNAME_SIZE];
@@ -1981,10 +2001,10 @@ static mdk_rdev_t *md_import_device(dev_t newdev, int super_format, int super_mi
 		printk(KERN_ERR "md: could not alloc mem for new device!\n");
 		return ERR_PTR(-ENOMEM);
 	}
-
+	/* 分配成员磁盘越级块页面 */
 	if ((err = alloc_disk_sb(rdev)))
 		goto abort_free;
-
+	/* 断言成员磁盘 */
 	err = lock_rdev(rdev, newdev);
 	if (err)
 		goto abort_free;
@@ -2000,7 +2020,7 @@ static mdk_rdev_t *md_import_device(dev_t newdev, int super_format, int super_mi
 	atomic_set(&rdev->nr_pending, 0);
 	atomic_set(&rdev->read_errors, 0);
 	atomic_set(&rdev->corrected_errors, 0);
-
+	/* 成员磁盘大小 */
 	size = rdev->bdev->bd_inode->i_size >> BLOCK_SIZE_BITS;
 	if (!size) {
 		printk(KERN_WARNING 
@@ -2010,9 +2030,8 @@ static mdk_rdev_t *md_import_device(dev_t newdev, int super_format, int super_mi
 		goto abort_free;
 	}
 
-	if (super_format >= 0) {
-		err = super_types[super_format].
-			load_super(rdev, NULL, super_minor);
+	if (super_format >= 0) {/* 加载成员磁盘超级块 */
+		err = super_types[super_format].load_super(rdev, NULL, super_minor);
 		if (err == -EINVAL) {
 			printk(KERN_WARNING 
 				"md: %s has invalid sb, not importing!\n",
@@ -2054,8 +2073,7 @@ static void analyze_sbs(mddev_t * mddev)
 
 	freshest = NULL;
 	ITERATE_RDEV(mddev,rdev,tmp)
-		switch (super_types[mddev->major_version].
-			load_super(rdev, freshest, mddev->minor_version)) {
+		switch (super_types[mddev->major_version].load_super(rdev, freshest, mddev->minor_version)) {
 		case 1:
 			freshest = rdev;
 			break;
@@ -2070,14 +2088,12 @@ static void analyze_sbs(mddev_t * mddev)
 		}
 
 
-	super_types[mddev->major_version].
-		validate_super(mddev, freshest);
+	super_types[mddev->major_version].validate_super(mddev, freshest);
 
 	i = 0;
 	ITERATE_RDEV(mddev,rdev,tmp) {
 		if (rdev != freshest)
-			if (super_types[mddev->major_version].
-			    validate_super(mddev, rdev)) {
+			if (super_types[mddev->major_version].validate_super(mddev, rdev)) {
 				printk(KERN_WARNING "md: kicking non-fresh %s"
 					" from array!\n",
 					bdevname(rdev->bdev,b));
@@ -2901,7 +2917,12 @@ static struct kobj_type md_ktype = {
 };
 
 int mdp_major = 0;
-
+/**ltl
+ * 功能: kobj_map数据结构的get接口，当MD设备被调用了do_open()，时调用此函数
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static struct kobject *md_probe(dev_t dev, int *part, void *data)
 {
 	static DEFINE_MUTEX(disks_mutex);
@@ -2920,6 +2941,7 @@ static struct kobject *md_probe(dev_t dev, int *part, void *data)
 		mddev_put(mddev);
 		return NULL;
 	}
+	/* 分配MD设备的通用磁盘对象 */
 	disk = alloc_disk(1 << shift);
 	if (!disk) {
 		mutex_unlock(&disks_mutex);
@@ -2955,7 +2977,12 @@ static void md_safemode_timeout(unsigned long data)
 }
 
 static int start_dirty_degraded;
-
+/**ltl
+ * 功能: 运行MD设备
+ * 参数: mddev	->MD设备
+ * 返回值:
+ * 说明:
+ */
 static int do_md_run(mddev_t * mddev)
 {
 	int err;
@@ -2980,9 +3007,9 @@ static int do_md_run(mddev_t * mddev)
 		analyze_sbs(mddev);
 
 	chunk_size = mddev->chunk_size;
-
+	/* 效验chunk_size */
 	if (chunk_size) {
-		if (chunk_size > MAX_CHUNK_SIZE) {
+		if (chunk_size > MAX_CHUNK_SIZE) {/* 1.超出最大范围 */
 			printk(KERN_ERR "too big chunk_size: %d > %d\n",
 				chunk_size, MAX_CHUNK_SIZE);
 			return -EINVAL;
@@ -2990,11 +3017,11 @@ static int do_md_run(mddev_t * mddev)
 		/*
 		 * chunk-size has to be a power of 2 and multiples of PAGE_SIZE
 		 */
-		if ( (1 << ffz(~chunk_size)) != chunk_size) {
+		if ( (1 << ffz(~chunk_size)) != chunk_size) { /* 不是2的幂 */
 			printk(KERN_ERR "chunk_size of %d not valid\n", chunk_size);
 			return -EINVAL;
 		}
-		if (chunk_size < PAGE_SIZE) {
+		if (chunk_size < PAGE_SIZE) { /* 小于页大小 */
 			printk(KERN_ERR "too small chunk_size: %d < %ld\n",
 				chunk_size, PAGE_SIZE);
 			return -EINVAL;
@@ -3004,7 +3031,7 @@ static int do_md_run(mddev_t * mddev)
 		ITERATE_RDEV(mddev,rdev,tmp) {
 			if (test_bit(Faulty, &rdev->flags))
 				continue;
-			if (rdev->size < chunk_size / 1024) {
+			if (rdev->size < chunk_size / 1024) { /* 成员磁盘空间太小 */
 				printk(KERN_WARNING
 					"md: Dev %s smaller than chunk_size:"
 					" %lluk < %dk\n",
@@ -3036,13 +3063,13 @@ static int do_md_run(mddev_t * mddev)
 		invalidate_bdev(rdev->bdev, 0);
 	}
 
-	md_probe(mddev->unit, NULL, NULL);
+	md_probe(mddev->unit, NULL, NULL); /* 作用? */
 	disk = mddev->gendisk;
 	if (!disk)
 		return -ENOMEM;
 
 	spin_lock(&pers_lock);
-	pers = find_pers(mddev->level, mddev->clevel);
+	pers = find_pers(mddev->level, mddev->clevel); /* 获取MD个性 */
 	if (!pers || !try_module_get(pers->owner)) {
 		spin_unlock(&pers_lock);
 		if (mddev->level != LEVEL_NONE)
@@ -3073,7 +3100,7 @@ static int do_md_run(mddev_t * mddev)
 
 	if (start_readonly)
 		mddev->ro = 2; /* read-only, but switch on first write */
-
+	/* 运行MD个性 */
 	err = mddev->pers->run(mddev);
 	if (!err && mddev->pers->sync_request) {
 		err = bitmap_create(mddev);
@@ -3113,7 +3140,7 @@ static int do_md_run(mddev_t * mddev)
 	
 	if (mddev->sb_dirty)
 		md_update_sb(mddev);
-
+	/* 设备MD空间大小(为什么要扩大一倍?) */
 	set_capacity(disk, mddev->array_size<<1);
 
 	/* If we call blk_queue_make_request here, it will
@@ -3124,7 +3151,7 @@ static int do_md_run(mddev_t * mddev)
 	 * earlier.
 	 */
 	mddev->queue->queuedata = mddev;
-	mddev->queue->make_request_fn = mddev->pers->make_request;
+	mddev->queue->make_request_fn = mddev->pers->make_request;/* 请求构造函数 */
 
 	/* If there is a partially-recovered drive we need to
 	 * start recovery here.  If we leave it to md_check_recovery,
@@ -3641,7 +3668,13 @@ static int get_disk_info(mddev_t * mddev, void __user * arg)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 向MD设备添加成员磁盘
+ * 参数: mddev	-> MD设备
+ *		info	->一个成员磁盘的信息
+ * 返回值:
+ * 说明:
+ */
 static int add_new_disk(mddev_t * mddev, mdu_disk_info_t *info)
 {
 	char b[BDEVNAME_SIZE], b2[BDEVNAME_SIZE];
@@ -3650,9 +3683,10 @@ static int add_new_disk(mddev_t * mddev, mdu_disk_info_t *info)
 
 	if (info->major != MAJOR(dev) || info->minor != MINOR(dev))
 		return -EOVERFLOW;
-
+	/* 成员磁盘数为0,表示添加第一个磁盘 */
 	if (!mddev->raid_disks) {
 		int err;
+		/* 导入成员磁盘 */
 		/* expecting a device which has a superblock */
 		rdev = md_import_device(dev, mddev->major_version, mddev->minor_version);
 		if (IS_ERR(rdev)) {
@@ -3664,8 +3698,7 @@ static int add_new_disk(mddev_t * mddev, mdu_disk_info_t *info)
 		if (!list_empty(&mddev->disks)) {
 			mdk_rdev_t *rdev0 = list_entry(mddev->disks.next,
 							mdk_rdev_t, same_set);
-			int err = super_types[mddev->major_version]
-				.load_super(rdev, rdev0, mddev->minor_version);
+			int err = super_types[mddev->major_version].load_super(rdev, rdev0, mddev->minor_version);
 			if (err < 0) {
 				printk(KERN_WARNING 
 					"md: %s has different UUID to %s\n",
@@ -3675,6 +3708,7 @@ static int add_new_disk(mddev_t * mddev, mdu_disk_info_t *info)
 				return -EINVAL;
 			}
 		}
+		/* 将成员磁盘添加到MD设备中 */
 		err = bind_rdev_to_array(rdev, mddev);
 		if (err)
 			export_rdev(rdev);
@@ -3713,8 +3747,7 @@ static int add_new_disk(mddev_t * mddev, mdu_disk_info_t *info)
 			else
 				rdev->raid_disk = -1;
 		} else
-			super_types[mddev->major_version].
-				validate_super(mddev, rdev);
+			super_types[mddev->major_version].validate_super(mddev, rdev);
 		rdev->saved_raid_disk = rdev->raid_disk;
 
 		clear_bit(In_sync, &rdev->flags); /* just to be sure */
@@ -4213,7 +4246,12 @@ static int md_getgeo(struct block_device *bdev, struct hd_geometry *geo)
 	geo->cylinders = get_capacity(mddev->gendisk) / 8;
 	return 0;
 }
-
+/**ltl
+ * 功能: MD设备的ioctl接口
+ * 参数:
+ * 返回值:
+ * 说明: mdada工具构造MD设备的其中一种方式: SET_ARRAY_INFO/ADD_NEW_DISK/RUN_ARRAY
+ */
 static int md_ioctl(struct inode *inode, struct file *file,
 			unsigned int cmd, unsigned long arg)
 {
@@ -4289,7 +4327,7 @@ static int md_ioctl(struct inode *inode, struct file *file,
 	}
 
 	switch (cmd)
-	{
+	{	/*[step1] 设置array信息*/
 		case SET_ARRAY_INFO:
 			{
 				mdu_array_info_t info;
@@ -4299,6 +4337,7 @@ static int md_ioctl(struct inode *inode, struct file *file,
 					err = -EFAULT;
 					goto abort_unlock;
 				}
+				/* 已经设定MD个性化 */
 				if (mddev->pers) {
 					err = update_array_info(mddev, &info);
 					if (err) {
@@ -4308,6 +4347,7 @@ static int md_ioctl(struct inode *inode, struct file *file,
 					}
 					goto done_unlock;
 				}
+				/* 成员磁盘不为空 */
 				if (!list_empty(&mddev->disks)) {
 					printk(KERN_WARNING
 					       "md: array %s already has disks!\n",
@@ -4315,6 +4355,7 @@ static int md_ioctl(struct inode *inode, struct file *file,
 					err = -EBUSY;
 					goto abort_unlock;
 				}
+				/* 成员磁盘数据不为NULL */
 				if (mddev->raid_disks) {
 					printk(KERN_WARNING
 					       "md: array %s already initialised!\n",
@@ -4322,6 +4363,7 @@ static int md_ioctl(struct inode *inode, struct file *file,
 					err = -EBUSY;
 					goto abort_unlock;
 				}
+				/* 设置MD设备的属性 */
 				err = set_array_info(mddev, &info);
 				if (err) {
 					printk(KERN_WARNING "md: couldn't set"
@@ -4403,14 +4445,14 @@ static int md_ioctl(struct inode *inode, struct file *file,
 	}
 
 	switch (cmd)
-	{
+	{	/*[step2] 添加新的磁盘 */
 		case ADD_NEW_DISK:
 		{
 			mdu_disk_info_t info;
 			if (copy_from_user(&info, argp, sizeof(info)))
 				err = -EFAULT;
 			else
-				err = add_new_disk(mddev, &info);
+				err = add_new_disk(mddev, &info); /* 添加一成员磁盘到MD设备中 */
 			goto done_unlock;
 		}
 
@@ -4425,7 +4467,7 @@ static int md_ioctl(struct inode *inode, struct file *file,
 		case SET_DISK_FAULTY:
 			err = set_disk_faulty(mddev, new_decode_dev(arg));
 			goto done_unlock;
-
+		/* [step3] 运行MD设备 */
 		case RUN_ARRAY:
 			err = do_md_run (mddev);
 			goto done_unlock;
@@ -5553,7 +5595,12 @@ static void md_geninit(void)
 	if (p)
 		p->proc_fops = &md_seq_fops;
 }
-
+/**ltl
+ * 功能: MD设备初始化
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int __init md_init(void)
 {
 	printk(KERN_INFO "md: md driver %d.%d.%d MAX_MD_DEVS=%d,"
@@ -5562,13 +5609,15 @@ static int __init md_init(void)
 			MD_PATCHLEVEL_VERSION, MAX_MD_DEVS, MD_SB_DISKS);
 	printk(KERN_INFO "md: bitmap version %d.%d\n", BITMAP_MAJOR_HI,
 			BITMAP_MINOR);
-
+	/* 不可分区的MD设备 */
 	if (register_blkdev(MAJOR_NR, "md"))
 		return -1;
+	/* 可分区的MD设备 */
 	if ((mdp_major=register_blkdev(0, "mdp"))<=0) {
 		unregister_blkdev(MAJOR_NR, "md");
 		return -1;
 	}
+	/* md_probe函数在do_open()->get_gendisk()函数中调用 */
 	blk_register_region(MKDEV(MAJOR_NR, 0), MAX_MD_DEVS, THIS_MODULE,
 				md_probe, NULL, NULL);
 	blk_register_region(MKDEV(mdp_major, 0), MAX_MD_DEVS<<MdpMinorShift, THIS_MODULE,

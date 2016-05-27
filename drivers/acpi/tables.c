@@ -316,7 +316,12 @@ acpi_get_table_header_early(enum acpi_table_id id,
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 解析MADT表下的子表
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int __init
 acpi_table_parse_madt_family(enum acpi_table_id id,
 			     unsigned long madt_size,
@@ -379,7 +384,12 @@ acpi_table_parse_madt_family(enum acpi_table_id id,
 
 	return count;
 }
-
+/**ltl
+ * 功能: 解析MADT表下的子表，子表分别是LAPIC、IOAPIC...
+ * 参数:
+ * 返回值:
+ * 说明: MADT表的ID为ACPI_APIC
+ */
 int __init
 acpi_table_parse_madt(enum acpi_madt_entry_id id,
 		      acpi_madt_entry_handler handler, unsigned int max_entries)

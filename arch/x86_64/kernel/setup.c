@@ -573,7 +573,8 @@ void __init setup_arch(char **cmdline_p)
 	 * Initialize the ACPI boot-time table parser (gets the RSDP and SDT).
 	 * Call this early for SRAT node setup.
 	 */
-	acpi_boot_table_init();
+	/*1. 获取ACPI各个表的首地址，将其放入全局变量sdt_entry中 */
+	acpi_boot_table_init(); 
 #endif
 
 #ifdef CONFIG_ACPI_NUMA
@@ -678,7 +679,8 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * get boot-time SMP configuration:
 	 */
-	if (smp_found_config)	/* 读取smp配置信息(只有acpi模块关闭情况下才有效) */
+	 /* 读取smp配置信息(如果在函数acpi_boot_init中解析到local apic和io apic信息，则get_smp_config函数直接返回) */
+	if (smp_found_config)	
 		get_smp_config();
 	init_apic_mappings();
 #endif

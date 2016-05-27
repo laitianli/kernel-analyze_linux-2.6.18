@@ -2,9 +2,9 @@
 #define __x86_64_POLL_H
 
 /* These are specified by iBCS2 */
-#define POLLIN		0x0001
+#define POLLIN		0x0001	/* 设备可以无阻塞的被读取(通常POLLIN | POLLRDNORM) */
 #define POLLPRI		0x0002
-#define POLLOUT		0x0004
+#define POLLOUT		0x0004  /* 设备可以无阻塞的写入(通常POLLOUT | POLLWRNORM) */
 #define POLLERR		0x0008
 #define POLLHUP		0x0010
 #define POLLNVAL	0x0020

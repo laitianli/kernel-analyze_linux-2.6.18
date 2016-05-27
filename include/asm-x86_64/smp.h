@@ -94,6 +94,12 @@ extern unsigned disabled_cpus;
  * Some lowlevel functions might want to know about
  * the real APIC ID <-> CPU # mapping.
  */
+/* cpuid 与 apic id之前的映射关系:
+ * 0->0
+ * 1->2
+ * 2->4
+ * 3->6
+ */
 extern u8 x86_cpu_to_apicid[NR_CPUS];	/* physical ID */
 extern u8 x86_cpu_to_log_apicid[NR_CPUS];
 extern u8 bios_cpu_apicid[];

@@ -631,6 +631,6 @@ void __init init_IRQ(void)
 	 */
 	setup_timer_hardware(); /* 开启定时器 */
 
-	if (!acpi_ioapic)
+	if (!acpi_ioapic) /* 在没有解析到ioapic信息情况下 */
 		setup_irq(2, &irq2); /* 由于主8259A芯片的pin-2是连接另一个8259A芯片的输出引脚(连接8259A从片) */
 }

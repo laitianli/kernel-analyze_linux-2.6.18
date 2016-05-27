@@ -1317,8 +1317,8 @@ struct acpi_resource {
 #define ACPI_NEXT_RESOURCE(res)             (struct acpi_resource *)((u8 *) res + res->length)
 
 struct acpi_pci_routing_table {
-	u32 length;
-	u32 pin;
+	u32 length;	/* 此数据结构的长度 */
+	u32 pin;	/* pci的pin引脚 */
 	acpi_integer address;	/* here for 64-bit alignment */
 	u32 source_index;
 	char source[4];		/* pad to 64 bits so sizeof() works in all cases */

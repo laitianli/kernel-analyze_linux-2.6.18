@@ -3286,7 +3286,7 @@ get_rq:
 	if (elv_queue_empty(q)) /* 如果请求队列是空的，则进入队列"蓄流" */
 		blk_plug_device(q); /* 执行"畜流"功能 */
 	add_request(q, req);/* 把当前的request插入到请求队列中 */
-out:
+out:       
 	if (sync)/* 如果在bio的标志已经设置的同步标志，调用底层驱动程序的策略处理函数，马上处理当前的request,而不是进入"畜流"状态。 */
 		__generic_unplug_device(q);
 

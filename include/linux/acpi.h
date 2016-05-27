@@ -113,7 +113,7 @@ struct acpi_table_madt {
 		u32			reserved:31;
 	}			flags;
 } __attribute__ ((packed));
-
+/* 对应于APIC表中的Type字段*/
 enum acpi_madt_entry_id {
 	ACPI_MADT_LAPIC = 0,
 	ACPI_MADT_IOAPIC,
