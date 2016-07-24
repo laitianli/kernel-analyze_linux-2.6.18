@@ -1103,7 +1103,7 @@ static inline struct sk_buff *__dev_alloc_skb(unsigned int length,
 {
 	struct sk_buff *skb = alloc_skb(length + NET_SKB_PAD, gfp_mask);
 	if (likely(skb))
-		skb_reserve(skb, NET_SKB_PAD);
+		skb_reserve(skb, NET_SKB_PAD); /* 用于在head和data之间预留出16B，用于存放硬件头 */
 	return skb;
 }
 

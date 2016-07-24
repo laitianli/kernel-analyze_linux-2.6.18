@@ -139,6 +139,14 @@ EXPORT_SYMBOL(skb_truesize_bug);
  *	Buffers may only be allocated from interrupts using a @gfp_mask of
  *	%GFP_ATOMIC.
  */
+/**ltl
+ * 功能: 分配Skb对象
+ * 参数: size ->数据大小
+ *		gfp_mask->
+ *		fclone->预测skb对象是否有可能被克隆
+ * 返回值:
+ * 说明:
+ */
 struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 			    int fclone)
 {
@@ -148,9 +156,9 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 	u8 *data;
 
 	cache = fclone ? skbuff_fclone_cache : skbuff_head_cache;
-
+	/* 不在DMA区域分配SKB空间，防止硬件所使用的DMA空间不够 */
 	/* Get the HEAD */
-	skb = kmem_cache_alloc(cache, gfp_mask & ~__GFP_DMA);
+	skb = kmem_cache_alloc(cache, gfp_mask & ~__GFP_DMA); 
 	if (!skb)
 		goto out;
 
@@ -166,7 +174,7 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 	skb->head = data;
 	skb->data = data;
 	skb->tail = data;
-	skb->end  = data + size;
+	skb->end  = data + size; /* 指向skb_shared_info结构 */
 	/* make sure we initialize shinfo sequentially */
 	shinfo = skb_shinfo(skb);
 	atomic_set(&shinfo->dataref, 1);
