@@ -331,6 +331,9 @@ extern void kfree_skb(struct sk_buff *skb);
 extern void	       __kfree_skb(struct sk_buff *skb);
 extern struct sk_buff *__alloc_skb(unsigned int size,
 				   gfp_t priority, int fclone);
+/* 用于分配输入的skb，由网卡驱动调用。但是传递一旦进入传输层，便需要设置该skb的宿主。TCP中为sk_stream_set_owner_r(),
+ * 而UDP中为skb_set_owner_r()
+ */
 static inline struct sk_buff *alloc_skb(unsigned int size,
 					gfp_t priority)
 {
@@ -1118,6 +1121,9 @@ static inline struct sk_buff *__dev_alloc_skb(unsigned int length,
  *
  *	%NULL is returned if there is no free memory. Although this function
  *	allocates memory it can be called from an interrupt.
+ */
+/* 用于分配输入的skb，由网卡驱动调用。但是传递一旦进入传输层，便需要设置该skb的宿主。TCP中为sk_stream_set_owner_r(),
+ * 而UDP中为skb_set_owner_r()
  */
 static inline struct sk_buff *dev_alloc_skb(unsigned int length)
 {

@@ -25,10 +25,13 @@
  *
  * FIXME: write proper description
  */
+/* 检测已使用的发送缓存区大小，若达到指定值，会唤醒传输控制块的sk_sleep队列上的睡眠进程并通知套接口的fasync_list
+ * 队列上的进程。TCP专用函数。设置到sock->sk_write_space接口上。通常当传输控制块的发送缓冲区长度的上限做了修改或释放了接收队列上的skb时被调用。
+ */
 void sk_stream_write_space(struct sock *sk)
 {
 	struct socket *sock = sk->sk_socket;
-
+	/* 保证可分配的空间到少达到发送缓冲区长度的上限三分之一。 */
 	if (sk_stream_wspace(sk) >= sk_stream_min_wspace(sk) && sock) {
 		clear_bit(SOCK_NOSPACE, &sock->flags);
 
@@ -171,7 +174,7 @@ do_interrupted:
 }
 
 EXPORT_SYMBOL(sk_stream_wait_memory);
-
+/* 设置到用于输入的TCP段的skb的销毁函数接口上，当释放该skb时被调用，用于更新接收队列中所有报文数据的总长度，以及预先分配长度 */
 void sk_stream_rfree(struct sk_buff *skb)
 {
 	struct sock *sk = skb->sk;

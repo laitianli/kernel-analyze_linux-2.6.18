@@ -108,15 +108,22 @@ struct proto;
  *	This is the minimal network layer representation of sockets, the header
  *	for struct sock and struct inet_timewait_sock.
  */
+/* ÊÇsockºÍinet_timewait_sock½á¹¹Ç°ÃæÒ»²¿·Ö³ÉÔ±Ò»ÑùµÄ¡£ */
 struct sock_common {
-	unsigned short		skc_family;
-	volatile unsigned char	skc_state;
-	unsigned char		skc_reuse;
-	int			skc_bound_dev_if;
+	unsigned short		skc_family;/* ËùÊôĞ­Òé×å */
+	volatile unsigned char	skc_state; /* µÈÍ¬ÓÚTCPµÄ×´Ì¬ */
+	unsigned char		skc_reuse; /* ±êÊ¶ÊÇ·ñ¿ÉÒÔÖØÓÃµØÖ·ºÍ¶Ë¿Ú£¬SO_REUSEADDR */
+	int			skc_bound_dev_if; /*  Èç¹û²»Îª0£¬¼´ÎªÊä³ö±¨ÎÄµÄÍøÂçÉè±¸Ë÷ÒıºÅ */
+	/* TCPÎ¬»¤Ò»¸öËùÓĞTCP´«Êä¿ØÖÆ¿éµÄÉ¢ÁĞ±ítcp_hashinfo, ¶øskc_nodeÓÃÀ´½«ËùÊôTCP´«Êä¿ØÖÆ¿éÁ¬½Óµ½·ÃÉ¢ÁĞ±í¡£
+	    UDPÎ¬»¤Ò»¸öÒÑ¾­°ó¶¨¶Ë¿ÚµÄUDP¿ØÖÆ¿éµÄÉ¢ÁĞ±íudp_hash,¶øskc_nodeÓÃÀ´½«ËùÊôUDP´«Êä¿ØÖÆ¿éÁ´½Óµ½¸ÃÉ¢ÁĞ±í¡£
+	 */
 	struct hlist_node	skc_node;
+	/* ÒÑ¾­°ó¶¨¶Ë¿ÚµÄ´«Êä¿ØÖÆ¿é×âÓÃ¸Ã×Ö¶Î²åÈëµ½ÓëÖ®°ó¶¨¶Ë¿ÚĞÅÏ¢½á¹¹ÎªÍ·½áµãµÄÁ´±íÖĞ¡£Ö»ÊÊÓÃTCP */
 	struct hlist_node	skc_bind_node;
 	atomic_t		skc_refcnt;
+	/*´æ´¢TCP×´Ì¬ÎªestablishedÊ±ÎªÈëµ½É¢ÁĞ±íµÄ¹Ø¼ü×Ö¼üÖµ¡£ÓÉÓÚ¼ÆËã¼üÖµÏà¶ÔºÄÊ±£¬Òò´ËÓÃÒ»¸ö³ÉÔ±À´´æ´¢¼üÖµÓĞÀûÓÚÌá¸ßĞ§ÂÊ*/
 	unsigned int		skc_hash;
+	/* Ö¸ÏòÍøÂç½Ó¿Ú²ãµÄÖ¸Õë */
 	struct proto		*skc_prot;
 };
 
@@ -179,6 +186,10 @@ struct sock_common {
   *	@sk_backlog_rcv: callback to process the backlog
   *	@sk_destruct: called at sock freeing time, i.e. when all refcnt == 0
  */
+/* ¹¹³É´«Êä¿ØÖÆ¿éµÄ»ù´¡£¬¸ú¾ßÌåĞ­Òé×åÎŞ¹Ø£¬°üº¬¸÷Ğ­Òé×å´«Êä²ãĞ­ÒéµÄ¹«¹²ĞÅÏ¢¡£
+ * Òò´Ë²»ÄÜÖ±½Ó×÷Îª´«Êä²ãµÄ¿ØÖÆ¿éÀ´Ê¹ÓÃ£¬²»Í¬Ğ­Òé×åµÄ´«Êä²ãÔÚÊ¹ÓÃsock½á¹¹Ê±¶¼»á¶ÔÆä½øĞĞÀ©Õ¹ 
+ * Ê¹ÓÆäÊÊºÏ¸÷×ÔµÄ´«ÊäÌØĞÔ¡£
+ */
 struct sock {
 	/*
 	 * Now struct inet_timewait_sock also uses sock_common, so please just
@@ -194,67 +205,138 @@ struct sock {
 #define sk_refcnt		__sk_common.skc_refcnt
 #define sk_hash			__sk_common.skc_hash
 #define sk_prot			__sk_common.skc_prot
+	/* sk_shutdown: ¹Ø±ÕÌ×½Ó¿Ú±êÖ¾£¬Öµ:
+	 * RCV_SHUTDOWN: ½ÓÊÕÍ¨µÀ¹Ø±Õ£¬²»ÔÊĞí¼ÌĞø½ÓÊÕÊı¾İ¡£
+	 * SEND_SHUTDOWN: ·¢ËÍÍ¨µÀ¹Ø±Õ£¬²»ÔÊĞí¼ÌĞø·¢ËÍÊı¾İ¡£
+	 * SHUTDOWN_MASK: ±íÊ¾ÍêÈ«¹Ø±Õ
+	 */
 	unsigned char		sk_shutdown : 2,
+	/* sk_no_check: ±êÊ¶ÊÇ·ñ¶ÔRAWºÍUDP½øĞĞĞ£ÑéºÍ¡£Öµ:
+ 	 * UDP_CSUM_NOXMIT: ²»Ö´ĞĞĞ£ÑéºÍ
+ 	 * UDP_CSUM_NORCV: Ö»ÓÃÓÚSunRPC
+ 	 * UDP_CSUM_DEFAULT: Ä¬ÈÏÖ´ĞĞĞ£ÑéºÍ
+	 */
 				sk_no_check : 2,
+	/* sk_userlocks: ±êÊ¶´«Êä²ãµÄÒ»Ğ©×´Ì¬,Öµ: 
+	 * SOCK_SNDBUF_LOCK: ÓÃ»§Í¨¹ısetsockoptÉèÖÃÁË·¢ËÍ»º³åÇø´óĞ¡
+     * SOCK_RCVBUF_LOCK: ÓÃ»§Í¨¹ısetsockoptÉèÖÃÁË½ÓÊÕ»º³åÇø´óĞ¡
+     * SOCK_BINDADDR_LOCK: ÒÑ¾­°ó¶¨ÁË±¾µØµØÖ·¡£
+     * SOCK_BINDPORT_LOCK: ÒÑ¾­°ó¶¨ÁË±¾µØ¶Ë¿Ú¡£
+	 */
 				sk_userlocks : 4;
+	/* µ±Ç°ÓòÖĞÌ×½Ó×ÖËùÊôµÄĞ­Òé */
 	unsigned char		sk_protocol;
+	/* ËùÊôÌ×½Ó¿ÚÀàĞÍ¡£±ÈÈçSOCK_STREAM */
 	unsigned short		sk_type;
+	/* ½ÓÊÕ»º³åÇø´óĞ¡µÄÉÏÏŞ */
 	int			sk_rcvbuf;
 	socket_lock_t		sk_lock;
+	/* ½ø³ÌµÈ´ıÁ¬½Ó¡¢µÈ´ıÊä³ö»º´æÇø¡¢µÈ´ı¶ÁÊı¾İÊ±£¬¶¼»á½«½ø³ÌÔİ´æµ½´Ë¶ÓÁĞÖĞ¡£ */
 	wait_queue_head_t	*sk_sleep;
+	/* Ä¿µÄÂ·ÓÉÏî»º´æ¡£ÔÚ´´½¨´«Êä¿ØÖÆ¿é·¢ËÍÊı¾İ±¨ÎÄÊ±£¬·¢ÏÖÎ´ÉèÖÃ¸Ã×Ö¶Î²Å´ÓÂ·ÓÉ±í»òÂ·ÓÉ»º´æÖĞ²éÑ¯µ½ÏàÓ¦µÄÂ·ÓÉÏîÀ´ÉèÖÃ¸Ã×Ö¶Î¡£ */
 	struct dst_entry	*sk_dst_cache;
+	/* <ÓëIPSecÏà¹Ø> */
 	struct xfrm_policy	*sk_policy[2];
+	/*  ²Ù×÷Â·ÓÉ»º´æ¶ÁĞ´Ëø */
 	rwlock_t		sk_dst_lock;
+	/* ½ÓÊÕ¶ÓÁĞsk_receive_queueÖĞËùÓĞ±¨ÎÄÊı¾İµÄ×Ü³¤¶È */
 	atomic_t		sk_rmem_alloc;
+	/* ËùÔÚ´«Êä¿ØÖÆ¿éÖĞ£¬Îª·¢ËÍ¶ø·ÖÅäµÄËùÓĞSKBÊı¾İÇøµÄ×Ü´óĞ¡¡£ */
 	atomic_t		sk_wmem_alloc;
+	/* ·ÖÅä¸¨Öú»º³åÇøµÄÉÏÏŞ£¬¸¨ÖúÊı¾İ°üÀ¨½øĞĞÉèÖÃÑ¡Ïî¡¢ÉèÖÃ¹ıÂËÊ±·ÖÅäµÄÄÚ´æºÍ×é²¥ÉèÖÃµÈ¡£ */
 	atomic_t		sk_omem_alloc;
+	/* ½ÓÊÕ¶ÓÁĞ£¬µÈ´ıÓÃ»§½ø³Ì¶ÁÈ¡¡£TCP±È½ÏÌØ±ğ£¬µ±½ÓÊÕµ½µÄÊı¾İ²»ÄÜÖ±½Ó¸´ÖÆµ½ÓÃ»§¿Õ¼äÊ±²Å»á»º´æÔÚ´Ë¡£ */
 	struct sk_buff_head	sk_receive_queue;
+	/* ·¢ËÍ¶ÓÁĞ¡£ÔÚTCPÖĞ£¬´Ë¶ÓÁĞÍ¬Ê±Ò²ÊÇÖØ´«¶ÓÁĞ£¬ÔÚsk_send_headÖ®Ç°ÎªÖØ´«¶ÓÁĞ£¬Ö®ºóÎª·¢ËÍ¶ÓÁĞ¡£ */
 	struct sk_buff_head	sk_write_queue;
+	/* ÓëÍø¿¨Éè±¸µÄDMAÏà¹Ø */
 	struct sk_buff_head	sk_async_wait_queue;
+	/* ·¢ËÍ¶ÓÁĞÖĞËùÓĞ±¨ÎÄÊı¾İµÄ×Ü³¤¶È¡£Ö»ÓÃÓÚTCP */
 	int			sk_wmem_queued;
+	/* Ô¤·ÖÅä»º´æ³¤¶È£¬Ö»ÊÊÓÃTCP */
 	int			sk_forward_alloc;
+	/* ÄÚ´æ·ÖÅä·½Ê½ */
 	gfp_t			sk_allocation;
+	/* ·¢ËÍ»º³åÇø³¤¶ÈµÄÉÏÏŞ£¬·¢ËÍ¶ÓÁĞÖĞ±¨ÎÄÊı¾İ×Ü³¤¶È²»ÄÜ³¬¹ı´ËÖµ¡£ */
 	int			sk_sndbuf;
+	/* Ä¿µÄÂ·ÓÉÍøÂçÉè±¸ÌØÕ÷£¬ÔÚsk_setup_caps()ÖĞÉèÖÃ */
 	int			sk_route_caps;
+	/* ´«Êä²ãÖ§³ÖGSOÀàĞÍ */
 	int			sk_gso_type;
+	/* ±êÊ¶½ÓÊÕ»º´æµÄÏÂÏŞÖµ */
 	int			sk_rcvlowat;
+	/* Ò»Ğ©×´Ì¬ºÍ±êÖ¾£¬Õâ¸ö±êÖ¾ÊÇ¸öÔÓ¼¯£¬Öµ: SOCK_DEAD, SOCK_KEEPOPEN */
 	unsigned long 		sk_flags;
+	/* ¹Ø±ÕÌ×½Ó¿ÚÇ°·¢ËÍÊ£ÓàÊı¾İµÄÊ±¼ä */
 	unsigned long	        sk_lingertime;
 	/*
 	 * The backlog queue is special, it is always used with
 	 * the per-socket spinlock held and requires low latency
 	 * access. Therefore we special case it's implementation.
 	 */
+	/* ºó±¸½ÓÊÕ¶ÓÁĞ£¬Ö»ÊÊÓÃTCP.µ±´«Êä¿ØÖÆ¿é±»ÉÏËøºó£¬µ±ÓĞĞÂµÄ±¨ÎÄ´«µİµ½´«Êä¿ØÖÆ¿éÊ±£¬
+	 * Ö»ÄÜ°Ñ±¨ÎÄ·Åµ½ºó±¸½ÓÊÕ¶ÓÁĞÖĞ£¬Ö®ºóÓĞÓÃ»§½ø³Ì¶ÁÈ¡TCPÊı¾İÊ±£¬ÔÙ´Ó¸Ã¶ÓÁĞÖĞÈ¡³ö¸´ÖÆµ½ÓÃ»§¿Õ¼äÖĞ¡£ */
 	struct {
 		struct sk_buff *head;
 		struct sk_buff *tail;
 	} sk_backlog;
+	/* ´íÎó Á´±í£¬´æ·ÅÏêÏ¸µÄ³ö´íĞÅÏ¢¡£Ó¦ÓÃ³ÌĞòÍ¨¹ısetsockoptÉèÖÃIP_RECVERRÑ¡Ïî£¬¼´ĞèÒª»ñÈ¡ÏêÏ¸µÄ³ö´íĞÅÏ¢¡£
+	 * µ±ÓĞ´íÎó·¢ÉúÊ±£¬¿ÉÍ¨¹ırecvmsg()£¬²ÎÊıflagsÎªMSG_ERRQUEUEÒµ»ñÈ¡ÏêÏ¸µÄ³ö´íĞÅÏ¢¡£
+	 */
 	struct sk_buff_head	sk_error_queue;
+	/* Ô­Ê¼ÍøÂçĞ­Òé¿éÖ¸Õë */
 	struct proto		*sk_prot_creator;
 	rwlock_t		sk_callback_lock;
+	/* ¼ÇÂ¼µ±Ç°´«Êä²ãÖĞ·¢ÉúµÄ×îºóÒ»´ÎÖÂÃü´íÎóµÄ´íÎóÂë£¬µ«Ó¦ÓÃ²ã¶ÁÈ¡ºó»á×Ô¶¯»Ö¸´Îª³õÊ¼Õı³£×´Ì¬ */
 	int			sk_err,
+	/* ÓÃÓÚ¼ÇÂ¼·ÇÖÂÃü´íÎó£¬»òÕßÓÃ×÷ÔÚ´«Êä¿ØÖÆ¿é±»Ëø¶¨Ê±¼ÇÂ¼´íÎóµÄºó±¸³ÉÔ±¡£ */
 				sk_err_soft;
+	/* µ±Ç°ÒÑ½¨Á¢µÄÁ¬½ÓÊı */
 	unsigned short		sk_ack_backlog;
+	/* Á¬½Ó¶ÓÁĞ³¤¶ÈµÄÉÏÏŞ */
 	unsigned short		sk_max_ack_backlog;
+	/*  ÓÃÓÚÉèÖÃ´ËÌ×½Ó¿ÚÊä³öÊı¾İ±¨µÄQoSÀà±ğ£¬²Î¼û: SO_PRIORITYºÍIP_TOSÑ¡Ïî */
 	__u32			sk_priority;
+	/* ·µ»ØÁ¬½ÓÖÁ¸ÃÌ×½Ó×ÖµÄÍâ²¿½ø³ÌÉí·İÑéÖ¤¡£ÓëSO_PEERCREDÑ¡ÏîÓĞ¹Ø */
 	struct ucred		sk_peercred;
+	/* Ì×½Ó¿Ú²ã½ÓÊÕ³¬Ê±£¬ SO_RCVTIMEO */
 	long			sk_rcvtimeo;
+	/* Ì×½Ó¿Ú²ã·¢ËÍ³¬Ê±£¬SO_SENDTIMEO */
 	long			sk_sndtimeo;
+	/* Ì×½Ó¿Ú¹ıÂËÆ÷¡£ÔÚ´«Êä²ã¶ÔÊäÈëµÄÊı¾İ°üÍ¨¹ıBPF¹ıÂË´úÂë½øĞĞ¹ıÂË£¬Ö»¶ÔÉèÖÃÁËÌ×½Ó¿Ú¹ıÂËÆ÷µÄ½ø³ÌÓĞĞ§¡£SO_ATTACH_FILTER */
 	struct sk_filter      	*sk_filter;
+	/* ´«Êä¿ØÖÆ¿é´æ·ÅË½ÓĞÊı¾İµÄÖ¸Õë */
 	void			*sk_protinfo;
+	/* Í¨¹ıTCPµÄ²»Í¬×´Ì¬£¬À´ÊµÏÖÁ¬½Ó¶¨Ê±Æ÷¡¢FIN_WAIT_2¶¨Ê±Æ÷ÒÔ¼°TCP±£»î¶¨Ê±Æ÷£¬ÔÚtcp_keepalive_timer()ÊµÏÖ */
 	struct timer_list	sk_timer;
+	/* ÔÚÎ´ÆôÓÃSOCK_RCVTSTAMPÌ×½Ó¿ÚÑ¡ÏîÊ±£¬¼ÇÂ¼±¨ÎÄ½ÓÊÕÊı¾İµ½Ó¦ÓÃ²ãµÄÊ±¼ä´Á¡£
+	 * ÔÚÆôÓÃSOCK_RCVTSTAMPÌ×½Ó¿ÚÑ¡ÏîÊ±£¬½ÓÊÕÊı¾İµ½Ó¦ÓÃ²ãµÄÊ±¼ä´Á¼ÇÂ¼ÔÚskb->tstampÖĞ¡£
+	 */
 	struct timeval		sk_stamp;
+	/* Ö¸Ïò¶ÔÓ¦Ì×½Ó¿ÚÖ¸Õë */
 	struct socket		*sk_socket;
 	void			*sk_user_data;
 	struct page		*sk_sndmsg_page;
+	/* Ö¸Ïòsk_write_queue¶ÓÁĞÖĞµÚÒ»¸öÎ´·¢ËÍµÄ½áµã£¬Èç¹ûsk_send_headÎª¿ÕÔò±íÊ¾·¢ËÍ¶ÓÁĞÊÇ¿ÕµÄ£¬·¢ËÍ¶ÓÁĞÉÏµÄ±¨ÎÄÒÑÈ«²¿·¢ËÍ¡£ */
 	struct sk_buff		*sk_send_head;
+	/* Ö¸Ïò±¾´«Êä¿ØÖÆ¿é×î½üÒ»´Î·ÖÅäµÄÒ³Ãæ£¬Í¨³£ÊÇµ±Ç°Ì×½Ó¿Ú·¢ËÍ¶ÓÁĞÖĞ×îºóÒ»¸öskbµÄ·ÖÆ¬Êı¾İ×îºóÒ»Ò³ */
 	__u32			sk_sndmsg_off;
+	/* ±êÊ¶ÓĞÊı¾İ¼´½«Ğ´ÈëÌ×½Ó¿Ú£¬Ò²¾ÍÊÇÓĞĞ´Êı¾İµÄÇëÇó¡£ */
 	int			sk_write_pending;
+	/* Ö¸Ïòsk_security_struct½á¹¹¡£ */
 	void			*sk_security;
+	/* µ±´«Êä¿ØÖÆ¿éµÄ×´Ì¬·¢Éú±ä»¯Ê±£¬»½ĞÑÄÇĞ©µÈ´ı±¾Ì×½Ó¿ÚµÄ½ø³Ì¡£ÔÚ´´½¨Ì×½Ó¿ÚÊ±³õÊ¼»¯£¬sock_def_wakeup() */ 
 	void			(*sk_state_change)(struct sock *sk);
+	/* µ±ÓĞÊı¾İµ½´ï½ÓÊÕ´¦ÀíÊ±£¬»½ĞÑ»ò·¢ĞÅºÅÍ¨Öª×¼±¸¶Á±¾Ì×½Ó¿ÚµÄ½ø³Ì¡£ÔÚ´´½¨Ì×½Ó¿ÚÊ±±»³õÊ¼»¯Îªsock_def_readable() */
 	void			(*sk_data_ready)(struct sock *sk, int bytes);
+	/* µ±·¢ËÍ»º´æ´óĞ¡·¢Éú±ä»¯»òÌ×½Ó¿Ú±»ÊÍ·ÅÊ±£¬»½ĞÑÒòµÈ´ı±¾Ì×½Ó¿Ú¶ø´¦ÓÚË¯Ãß×´Ì¬µÄ½ø³Ì£¬°üÀ¨sk_sleepºÍfasync_list¶ÓÁĞÉÏµÄ½ø³Ì */
 	void			(*sk_write_space)(struct sock *sk);
+	/* ±¨¸æ´íÎóµÄ»Øµ÷º¯Êı¡£Èç¹ûµÈ´ı¸Ã´«Êä¿ØÖÆ¿éµÄ½ø³ÌÕıÔÚË¯Ãß£¬Ôò½«»½ĞÑ¡£sock_def_error_report() */
 	void			(*sk_error_report)(struct sock *sk);
+	/* ÓÃÓÚTCPºÍPPPoEÖĞ¡£ÔÚTCPÖĞ£¬ÓÃÓÚ½ÓÊÕÔ¤±¸¶ÓÁĞºÍºó±¸¶ÓÁĞÖĞµÄTCP¶Î£¬TCPµÄsk_backlog_rcv½Ó¿ÚÎªtcp_v4_do_rcv().
+	 * Èç¹ûÔ¤±¸¶ÓÁĞÖĞ»¹´æÔÚTCP¶Î£¬Ôòµ÷ÓÃtcp_prequeue_process()´¦Àí¡£
+	 * Èç¹ûºó±¸¶ÓÁĞÖĞ»¹´æÔÚTCP¶Î£¬Ôòµ÷ÓÃrelease_sock()´¦Àí£¬Ò²»á»Øµ÷sk_backlog_rcv()¡£
+	 */
   	int			(*sk_backlog_rcv)(struct sock *sk,
 						  struct sk_buff *skb);  
 	void                    (*sk_destruct)(struct sock *sk);
@@ -449,12 +531,14 @@ static inline int sk_stream_memory_free(struct sock *sk)
 }
 
 extern void sk_stream_rfree(struct sk_buff *skb);
-
+/* µ±TCP¶ÎµÄSKB´«µİµ½TCP´«Êä¿ØÖÆ¿éÖĞ£¬±ã»áµ÷ÓÃ´Ëº¯ÊıÉèÖÃskbµÄËŞÖ÷£¬²¢ÉèÖÃ´ËskbµÄÏú»Ùº¯Êı£¬»¹Òª¸üĞÂ½ÓÊÕ¶ÓÁĞÖĞËùÓĞ±¨ÎÄÊı¾İ×Ü³¤¶È¡£
+ * ÒÔ¼°Ô¤·ÖÅä»º´æ³¤¶È¡£
+ */
 static inline void sk_stream_set_owner_r(struct sk_buff *skb, struct sock *sk)
 {
-	skb->sk = sk;
-	skb->destructor = sk_stream_rfree;
-	atomic_add(skb->truesize, &sk->sk_rmem_alloc);
+	skb->sk = sk; /* ÉèÖÃskbµÄËŞÖ÷ */
+	skb->destructor = sk_stream_rfree; /* ÉèÖÃÏú»Ùº¯Êı */
+	atomic_add(skb->truesize, &sk->sk_rmem_alloc); 
 	sk->sk_forward_alloc -= skb->truesize;
 }
 
@@ -506,6 +590,7 @@ struct timewait_sock_ops;
  * socket layer -> transport layer interface
  * transport -> network interface is defined by struct inet_proto
  */
+/* ÎªÍøÂç½Ó¿Ú²ã¡£½á¹¹ÖĞµÄ²Ù×÷ÊµÏÖ´«Êä²ãµÄ²Ù×÷ºÍ´Ó´«Êä²ãµ½ÍøÂç²ãµ÷ÓÃµÄÌø×ª */
 struct proto {
 	void			(*close)(struct sock *sk, 
 					long timeout);
@@ -518,6 +603,7 @@ struct proto {
 
 	int			(*ioctl)(struct sock *sk, int cmd,
 					 unsigned long arg);
+	/* ´«Êä²ã½Ó¿Ú³õÊ¼»¯½Ó¿Ú£¬ÔÚ´´½¨Ì×½Ó¿ÚÊ±£¬ÔÚinet_create()ÖĞ±»µ÷ÓÃ¡£ */
 	int			(*init)(struct sock *sk);
 	int			(*destroy)(struct sock *sk);
 	void			(*shutdown)(struct sock *sk, int how);
@@ -545,18 +631,22 @@ struct proto {
 					int offset, size_t size, int flags);
 	int			(*bind)(struct sock *sk, 
 					struct sockaddr *uaddr, int addr_len);
-
+	/* ÓÃÓÚÈÈÃÅÊÕÔ¤±¸¶ÓÁĞºÍºó±¸¶ÓÁĞÖĞµÄTCP¶Î¡£ */
 	int			(*backlog_rcv) (struct sock *sk, 
 						struct sk_buff *skb);
-
+	/* Ìí¼Óµ½¹ÜÀí´«Êä¿ØÖÆ¿éÉ¢ÁĞ±íµÄ½Ó¿Ú£¬TCP: tcp_v4_hash(),tcp_unhash() */
 	/* Keeping track of sk's, looking them up, and port selection methods. */
 	void			(*hash)(struct sock *sk);
 	void			(*unhash)(struct sock *sk);
+	/* ÊµÏÖµØÖ·Óë¶Ë¿ÚµÄ°ó¶¨¡£TCP:tcp_v4_get_port(),UDP:udp_v4_get_port() */
 	int			(*get_port)(struct sock *sk, unsigned short snum);
 
 	/* Memory pressure */
+	/* Ö»ÓĞTCPÊ¹ÓÃ£¬µ±Ç°Õû¸öTCP´«Êä²ãÖĞÎª»º³åÇø·ÖÅäµÄÄÚ´æ³¬¹ıtcp_mem[1],±ã½øÈëÁË¸æ¾¯×´Ì¬£¬»áµ÷ÓÃ´Ë½Ó¿ÚÉèÖÃ¸æ¾¯×´Ì¬¡£tcp:tcp_enter_memory_pressure() */	
 	void			(*enter_memory_pressure)(void);
+	/* TCPÊ¹ÓÃ£¬±íÊ¾µ±Ç°Õû¸öTCP´«Êä²ãÖĞÎª»º³åÇø·ÖÅäµÄÄÚ´æ(°üÀ¨ÊäÈë»º³å¶ÓÁĞ)¡£ÔÚTCPÖĞËüÖ¸Ïò±äÁ¿tcp_memory_allocated. */
 	atomic_t		*memory_allocated;	/* Current allocated memory. */
+	/* ±íÊ¾µ±Ç°Õû¸öTCP´«Êä²ãÖĞ´´½¨µÄÌ×½Ó¿ÚÊıÄ¿¡£Ö¸Ïò±äÁ¿tcp_sockets_allocated. */
 	atomic_t		*sockets_allocated;	/* Current number of sockets. */
 	/*
 	 * Pressure flag: try to collapse.
@@ -564,28 +654,36 @@ struct proto {
 	 * All the sk_stream_mem_schedule() is of this nature: accounting
 	 * is strict, actions are advisory and have some latency.
 	 */
+	/* ±êÖ¾£¬Ö»ÓÃÓÚTCP,ÔÚTCP´«Êä²ãÖĞ»º³å´óĞ¡½øÈë¾¯¸æ×´Ì¬Ê±£¬ËüÖÃ1£¬·ñÔòÖÃ0£¬Ö¸Ïò±äÁ¿tcp_memory_pressure. */
 	int			*memory_pressure;
+	/* Ö¸Ïòsysctl_tcp_memÊı×é£¬²Î¼ûtcp_mem */
 	int			*sysctl_mem;
+	/* Ö¸Ïòsysctl_rmemÊı×é */
 	int			*sysctl_wmem;
+	/* Ö¸Ïòsysctl_tcp_rmemÊı×é */
 	int			*sysctl_rmem;
+	/* Ö»ÓÃÓÚTCPÊ¹ÓÃ£¬TCPÊ×²¿µÄ×î´ó³¤¶È£¬¿¼ÂÇÁËËùÓĞµÄÑ¡Ïî */
 	int			max_header;
-
+	/* ÓÃÓÚ·ÖÅä´«Êä¿ØÖÆ¿éµÄslab¸ßËÙ»º´æ£¬ÔÚ×¢²á¶ÔÓ¦´«Êä²ãĞ­ÒéÊ±½¨Á¢¡£ */
 	kmem_cache_t		*slab;
+	/* ±êÊ¶´«Êä¿ØÖÆ¿éµÄ´óĞ¡ */
 	unsigned int		obj_size;
-
+	/* Ö»ÓĞTCPÖĞÊ¹ÓÃ£¬±íÊ¾Õû¸öTCP´«Êä²ãÖĞ´ıÏú»ÙµÄÌ×½Ó¿ÚÊıÄ¿£¬Ö¸Ïòtcp_orphan_count */
 	atomic_t		*orphan_count;
-
+	/* Ö»ÔÚTCPÖĞÊ¹ÓÃ£¬Ö¸ÏòÁ¬½ÓÇëÇó´¦Àí½Ó¿Ú¼¯ºÏ£¬°üÀ¨·¢ËÍSYN+ACKµÈÊµÏÖ¡£ */
 	struct request_sock_ops	*rsk_prot;
+	/* Ö»ÔÚTCPÖĞÊ¹ÓÃ£¬Ö¸Ïòtimewait¿ØÖÆ¿é²Ù×÷½Ó¿Ú¡£ÊµÀı: tcp_timewait_sock_ops */
 	struct timewait_sock_ops *twsk_prot;
 
 	struct module		*owner;
-
+	/* ±êÊ¶´«Êä²ãµÄÃû³Æ£¬TCPĞ­ÒéÎª"TCP", UDPĞ­ÒéÔòÎª"UDP" */
 	char			name[32];
-
+	/* Á¬½Ó¼ş£¬Í¨¹ı´Ë×Ö¶ÎÎªproto_listÖĞ */
 	struct list_head	node;
 #ifdef SOCK_REFCNT_DEBUG
 	atomic_t		socks;
 #endif
+	/* Í³¼ÆÃ¿¸öCPUµÄproto×´Ì¬ */
 	struct {
 		int inuse;
 		u8  __pad[SMP_CACHE_BYTES - sizeof(int)];
@@ -1090,7 +1188,9 @@ static inline int skb_copy_to_page(struct sock *sk, char __user *from,
  * 	Inlined as it's very short and called for pretty much every
  *	packet ever received.
  */
-
+/* Ã¿¸öÓÃÓÚÊä³öµÄskb¶¼Òª¹ØÁªµ½Ò»¸ö´«Êä¿ØÖÆ¿éÉÏ£¬ÕâÑù¿ÉÒÔµ÷Õû¸Ã´«Êä¿ØÖÆ¿éÎª·¢ËÍ¶ø·ÖÅäµÄËùÓĞskbÊı¾İÇøµÄ×Ü´óĞ¡£¬
+ * ²¢ÉèÖÃ´ËskbµÄÏú»Ùº¯Êı¡£  
+ */
 static inline void skb_set_owner_w(struct sk_buff *skb, struct sock *sk)
 {
 	sock_hold(sk);
@@ -1098,7 +1198,9 @@ static inline void skb_set_owner_w(struct sk_buff *skb, struct sock *sk)
 	skb->destructor = sock_wfree;
 	atomic_add(skb->truesize, &sk->sk_wmem_alloc);
 }
-
+/* µ±UDPÊı¾İ±¨µÄskb´«µİ²¢Ìí¼Óµ½UDP´«Êä¿ØÖÆ¿éµÄ½ÓÊÕ¶ÓÁĞÖĞ£¬±ã»áµ÷ÓÃ´Ëº¯ÊıÉèÖÃskbµÄËŞÖ÷£¬²¢ÉèÖÃskbµÄÏú»Ùº¯Êı¡£
+ * »¹Òª¸üĞÂ½ÓÊÕ¶ÓÁĞÖĞµÄËùÓĞ±¨ÎÄÊı¾İ×Ü³¤¶È¡£
+ */
 static inline void skb_set_owner_r(struct sk_buff *skb, struct sock *sk)
 {
 	skb->sk = sk;
@@ -1152,7 +1254,33 @@ static inline unsigned long sock_wspace(struct sock *sk)
 	}
 	return amt;
 }
-
+/**ltl
+ * ¹¦ÄÜ: ÓÃÀ´½«SIGIO»òSIGURGĞÅºÅ·¢ËÍ¸øÔÚ¸ÃÌ×½Ó¿ÚÉÏµÄ½ø³Ì£¬Í¨Öª¸Ã½ø³Ì¿ÉÒÔ¶Ô¸ÃÎÄ¼ş½øĞĞ¶ÁĞ´ 
+ * ²ÎÊı: sk->Í¨Öª½ø³Ì¿É½øĞĞIO´¦ÀíµÄ´«Êä¿ØÖÆ¿é¡£
+ *		how-> 0: ¼ì²â±êÊ¶Ó¦ÓÃ³ÌĞòÍ¨¹ırecvµÈµ÷ÓÃÊ±£¬ÊÇ·ñÔÚµÈ´ıÊı¾İµÄ½ÓÊÕ
+ * 			 1: ¼ì²â´«Êä¿ØÖÆ¿éµÄ·¢ËÍ¶ÓÁĞÊÇ·ñÔø¾­´ïµ½ÉÏÏŞ¡£
+ * 			 2: ²»×öÈÎºÎ¼ì²â£¬Ö±½ÓÏòµÈ´ı½ø³Ì·¢ËÍSIGIOĞÅºÅ¡£
+ *			 3: ÏòµÈ´ı½ø³Ì·¢ËÍSIGURGĞÅºÅ¡£
+ * 		band-> POLL_IN: ÊäÈëÊı¾İÓĞĞ§£¬¿ÉÒÔ¶Á
+ *			  POLL_OUT: Êä³ö»º³åÇøÓĞĞ§£¬¿ÉÒÔĞ´
+ *			  POLL_MSG: ÊäÈëÏûÏ¢£¬¿ÉÒÔ¶Á
+ *			 POLL_ERR: IOÒì³£
+ *			 POLL_PRI:¸ßÓÅÏÈ¼¶µÄÊäÈëÊı¾İÓĞĞ§£¬¿ÉÒÔ¶Á
+ * 			 pOLL_HUP: Éè±¸¹ÒÆğ»òÎÄ¼şÒÑ¹Ø±Õ£¬ÎŞ·¨¼ÌĞø¶ÁĞ´¡£
+ * ·µ»ØÖµ:
+ * ËµÃ÷: ¾¡¹Ü×èÈûºÍ·Ç×èÈû²Ù×÷Í¬select·½·¨µÄ½áºÏ¶ÔÓÚ²éÑ¯Éè±¸ÔÚ´ó¶àÊıÇé¿öÏÂÊÇÓĞĞ§µÄ£¬µ«ÔÚÄ³Ğ©Çé¿öÏÂ»¹ÊÇ²»ÄÜÍêÈ«ÓĞĞ§½â¾öÎÊÌâ¡£
+ * 	ÀıÈçÒ»¸ö½ø³Ì£¬ÔÚµÍÓÅÏÈ¼¶ÉÏÖ´ĞĞÒ»¸ö½Ï³¤µÄ¼ÆËãÑ­»·£¬µ«ÊÇĞèÒª¾¡¿ÉÄÜ¿ìµØ´¦ÀíÊäÈëÊı¾İ¡£ÈôÕâ¸ö½ø³ÌÍ¨¹ıÏìÓ¦ÍâÉè»ñÈ¡Êı¾İ£¬µ±ĞÂÊı¾İ¿ÉÓÃÊ±
+ * 	ËüÓ¦µ±Á¢¿ÌÖªµÀ¡£Í¨³£Ó¦ÓÃ³ÌĞò¿ÉÄÜµ÷ÓÃselectÓĞ¹æÂÉµØ¼ì²éÊı¾İ£¬µ«ÊÇ£¬Èç¹ûĞèÒª¸üÑ¸ËÙµØ´¦ÀíÍâÉèÊı¾İ£¬¾Í¿ÉÒÔÊ¹ÓÃÒì²½Í¨ÖªµÄ·½·¨£¬Ê¹ÓÃ
+ * 	Ó¦ÓÃ³ÌĞò½ÓÊÜÒ»¸öĞÅºÅ£¬¶ø²»ĞèÒªÖ÷¶¯²éÑ¯¡£
+ * 	Ó¦ÓÃ³ÌĞòĞëÖ´ĞĞ2²½ÖèÊ¹ÄÜÀ´×ÔÊäÈëÎÄ¼şµÄÒì²½Í¨Öª: 1.Ö¸¶¨Ò»¸ö½ø³Ì×÷ÎªÎÄ¼şµÄÓµÓĞÕß(ÄÚºËÖªµÀÍ¨µÀ¶ÔÏó)¡£µ±Ò»¸ö½ø³ÌÊ¹ÓÃfcntl()ÏµÍ³µ÷ÓÃ·¢³öF_SETOWNÃüÁî£¬
+ * 	Õâ¸öÓµÓĞÕß½ø³ÌµÄID±»±£´æÔÚfilp->f_ownerÖĞ¹©ÒÔºóÊ¹ÓÃ¡£ 2.µ÷ÓÃfcntl(sockfd, F_SETFL)½«ÃüÁîF_SETFLÔÚÉè±¸ÖĞÉèÖÃFASYNC±êÖ¾¡£
+ * 	3.ÓÃ»§¿Õ¼ä°²×°SIGIOĞÅºÅ£¬
+ * 	eg: signal(SIGIO,&input_handler);
+ *     fcntl(sockfd, F_SETONW, getpid());
+ * 	   oflags = fcntl(sockfd, F_GETFL);
+ * 	   fcntl(sockfd, F_SETFL, oflags | FASYNC)
+ *
+ */
 static inline void sk_wake_async(struct sock *sk, int how, int band)
 {
 	if (sk->sk_socket && sk->sk_socket->fasync_list)

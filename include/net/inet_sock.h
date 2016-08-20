@@ -105,41 +105,61 @@ struct rtable;
  * @mc_list - Group array
  * @cork - info to build ip hdr on each ip frag while socket is corked
  */
+/* 是IPv4协议专用的传输控制块，是对sock结构的扩展，在传输控制块的基本属性已具备的基础上，进一步提供了IPv4协议专有的一些属性。如:TTL,组播列表
+ * IP地址、端口。
+ */
 struct inet_sock {
 	/* sk and pinet6 has to be the first two members of inet_sock */
+	/* 通用的网络层描述块 */
 	struct sock		sk;
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	struct ipv6_pinfo	*pinet6;
 #endif
 	/* Socket demultiplex comparisons on incoming packets. */
-	__u32			daddr;
-	__u32			rcv_saddr;
-	__u16			dport;
-	__u16			num;
-	__u32			saddr;
-	__s16			uc_ttl;
+	__u32			daddr; /* 目的IP地址 */  
+	__u32			rcv_saddr; /* 已经绑定的本地IP地址。接收数据时，作为条件一部分查找数据所属的传输控制块。 */
+	__u16			dport; /* 目的端口 */
+	__u16			num; /* 主机字节序存储的本地端口 */
+	__u32			saddr; /* 跟rcv_saddr一样也标识本地IP地址，但在发送时使用。两者用途不一样。 */
+	__s16			uc_ttl; /* 单播报文的TTL */
+	/* 存放一些IPPROTO_IP级别的选项值 */
 	__u16			cmsg_flags;
-	struct ip_options	*opt;
-	__u16			sport;
-	__u16			id;
-	__u8			tos;
-	__u8			mc_ttl;
+	struct ip_options	*opt;/* IP数据报选项本身 */
+	__u16			sport; /* 由num转换成的网络字节序的源端口 */
+	__u16			id; /* 一个单调递增的值，用来赋给IP首部中的id域 */
+	__u8			tos;/* 用于设置IP数据报首部的TOS域 */
+	__u8			mc_ttl; /* 用于设置多播数据报的TTL */
+	/* 标志套接口是否启用跌幅MTU发现功能，值: IP_PMTUDISC_DO，与IP_MTU_DISCOVER套接口选项有关 
+     * 在输出IP数据报时，会用ip_dont_fragment()来检测待输出的IP数据报能否分片。如果不能分片，则会在IP数据报首部添加不允许分片的标志。
+	 */
 	__u8			pmtudisc;
+	/* 标识是否允许接收扩展的可靠错误信息，与IP_RECVERR套接口选项相关 */
 	__u8			recverr:1,
+	/* 是否为基于连接的传输控制块。即是否为基于inet_connection_sock结构的传输控制块，如TCP传输控制块 */
 				is_icsk:1,
+	/* 标识是否允许绑定非主机地址。与IP_FREEBIND 选项相关 */				
 				freebind:1,
+	/* 标识IP首部是否由用户数据构建。该标志只用于RAW套接口。一旦设置后，IP选项中的IP_TTL和IP_TOS都被忽略。 */				
 				hdrincl:1,
+	/* 标识组播是否发几回路 */				
 				mc_loop:1;
+	/* 发送组播报文的网络设备索引号。如果为0，则表示可以从任何网络设备发送。 */
 	int			mc_index;
+	/* 发送组播报文的源地址。 */
 	__u32			mc_addr;
+	/* 所在套接口加入的组播地址列表。 */
 	struct ip_mc_socklist	*mc_list;
+	/* UDP或原始IP在每次发送时缓存的一些临时信息。如，UDP数据报或原始IP数据报分片的大小。 */
 	struct {
-		unsigned int		flags;
-		unsigned int		fragsize;
-		struct ip_options	*opt;
-		struct rtable		*rt;
+		unsigned int		flags; 
+		unsigned int		fragsize;/* 分片大小 */
+		struct ip_options	*opt; /* IP选项 */
+		struct rtable		*rt; /* 发送数据报使用的输出跌幅缓存项。 */
+		/* 当前发送的数据报的数据长度 */
 		int			length; /* Total length of all frames */
+		/* 输出IP数据报的目的地址 */
 		u32			addr;
+		 /* 用flowi结构来缓存目的地址、目的端口、源地址和源端口，构造UDP报文时有关信息就在这里取。 */
 		struct flowi		fl;
 	} cork;
 };

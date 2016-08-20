@@ -837,6 +837,7 @@ static void inline sock_lock_init(struct sock *sk)
  *	@prot: struct proto associated with this new sock instance
  *	@zero_it: if we should zero the newly allocated sock
  */
+/* 创建套接口时，TCP、UDP和原始IP会分配一个传输控制块。用sk_free()释放 */
 struct sock *sk_alloc(int family, gfp_t priority,
 		      struct proto *prot, int zero_it)
 {
@@ -875,7 +876,7 @@ out_free:
 		kfree(sk);
 	return NULL;
 }
-
+/* 释放传输控制块 */
 void sk_free(struct sock *sk)
 {
 	struct sk_filter *filter;
@@ -903,7 +904,7 @@ void sk_free(struct sock *sk)
 		kfree(sk);
 	module_put(owner);
 }
-
+/* 克隆一个新的传输控制块 */
 struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
 {
 	struct sock *newsk = sk_alloc(sk->sk_family, priority, sk->sk_prot, 0);
@@ -1004,6 +1005,9 @@ void __init sk_init(void)
 /* 
  * Write buffer destructor automatically called from kfree_skb. 
  */
+/* 设置到用于输出skb的销毁函数接口上。当释放该skb时被调用，用于更新所属传输控制块为发送而分配的所有skb数据区的总大小。
+ * 调用sk_write_space接口来唤醒因等待本套接口而处于睡眠状态的进程。递减对所属传输控制块的引用。
+ */
 void sock_wfree(struct sk_buff *skb)
 {
 	struct sock *sk = skb->sk;
@@ -1049,6 +1053,12 @@ unsigned long sock_i_ino(struct sock *sk)
 /*
  * Allocate a skb from the socket's send buffer.
  */
+/*ltl 
+ * 功能: 用于分配发送缓存
+ * 参数: 
+ * 返回值:
+ * 说明: 在TCP中，只是用于构造SYN+ACK时使用。 用户发送数据时通常使用sk_stream_alloc_pskb()分配。
+ */
 struct sk_buff *sock_wmalloc(struct sock *sk, unsigned long size, int force,
 			     gfp_t priority)
 {
@@ -1081,6 +1091,7 @@ struct sk_buff *sock_rmalloc(struct sock *sk, unsigned long size, int force,
 /* 
  * Allocate a memory block from the socket's option memory buffer.
  */ 
+/* 分配有关选项的缓存，用sock_kfree_s()来释放 */
 void *sock_kmalloc(struct sock *sk, int size, gfp_t priority)
 {
 	if ((unsigned)size <= sysctl_optmem_max &&
@@ -1110,26 +1121,28 @@ void sock_kfree_s(struct sock *sk, void *mem, int size)
 /* It is almost wait_for_tcp_memory minus release_sock/lock_sock.
    I think, these locks should be removed for datagram sockets.
  */
+/* 等待可以分配的内存 */
 static long sock_wait_for_wmem(struct sock * sk, long timeo)
 {
 	DEFINE_WAIT(wait);
 
 	clear_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
 	for (;;) {
-		if (!timeo)
+		if (!timeo)/* 超时 */
 			break;
-		if (signal_pending(current))
+		if (signal_pending(current)) /* 接收到信号 */
 			break;
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
 		prepare_to_wait(sk->sk_sleep, &wait, TASK_INTERRUPTIBLE);
-		if (atomic_read(&sk->sk_wmem_alloc) < sk->sk_sndbuf)
+		if (atomic_read(&sk->sk_wmem_alloc) < sk->sk_sndbuf) /* 分配已经达到上限 */
 			break;
-		if (sk->sk_shutdown & SEND_SHUTDOWN)
+		if (sk->sk_shutdown & SEND_SHUTDOWN) /* 发送通道被关闭 */
 			break;
 		if (sk->sk_err)
 			break;
 		timeo = schedule_timeout(timeo);
 	}
+	/* 等结束 */
 	finish_wait(sk->sk_sleep, &wait);
 	return timeo;
 }
@@ -1138,7 +1151,14 @@ static long sock_wait_for_wmem(struct sock * sk, long timeo)
 /*
  *	Generic send/receive buffer handlers
  */
-
+/**ltl
+ * 功能: 为UDP和RAW分配skb
+ * 参数: sk	->
+ *		header_len-> 待分配SKB线性数据区的大小。
+ * 		data_len->待分配skb的SG类型的聚合分散IO的数据区的大小
+ * 返回值:
+ * 说明: TCP用sock_wmalloc()
+ */
 static struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
 					    unsigned long header_len,
 					    unsigned long data_len,
@@ -1151,10 +1171,10 @@ static struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
 
 	gfp_mask = sk->sk_allocation;
 	if (gfp_mask & __GFP_WAIT)
-		gfp_mask |= __GFP_REPEAT;
-
+		gfp_mask |= __GFP_REPEAT; /* 为了尽可能多地尝试分配内存 */
+	/* 获取允许操作超时的时间值 */
 	timeo = sock_sndtimeo(sk, noblock);
-	while (1) {
+	while (1) { /* 循环分配skb或操作超时为止。 */
 		err = sock_error(sk);
 		if (err != 0)
 			goto failure;
@@ -1210,7 +1230,7 @@ static struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
 			goto failure;
 		if (signal_pending(current))
 			goto interrupted;
-		timeo = sock_wait_for_wmem(sk, timeo);
+		timeo = sock_wait_for_wmem(sk, timeo);/* 用于等待分配可用于输出的内存 */
 	}
 
 	skb_set_owner_w(skb, sk);
@@ -1222,7 +1242,15 @@ failure:
 	*errcode = err;
 	return NULL;
 }
-
+/**ltl
+ * 功能: 为UDP和RAW套接口分配用于输出的SKB. 
+ * 参数: sk	->待分配skb的宿主传输控制块
+ *		size-> 待分配skb大小
+ *		noblock->分配时是否允许阻塞
+ *		errcode->返回操作错误码。
+ * 返回值:
+ * 说明:
+ */
 struct sk_buff *sock_alloc_send_skb(struct sock *sk, unsigned long size, 
 				    int noblock, int *errcode)
 {
@@ -1399,7 +1427,9 @@ ssize_t sock_no_sendpage(struct socket *sock, struct page *page, int offset, siz
 /*
  *	Default Socket Callbacks
  */
-
+/* 用于唤醒传输控制块的sk_sleep队列上的睡眠进程，是传输控制块默认的唤醒等待该套接口的函数。
+ * 该函数设置到传输控制块的sk_state_change接口上，当传输控制块的状态发生变化时被调用。
+ */
 static void sock_def_wakeup(struct sock *sk)
 {
 	read_lock(&sk->sk_callback_lock);
@@ -1407,7 +1437,9 @@ static void sock_def_wakeup(struct sock *sk)
 		wake_up_interruptible_all(sk->sk_sleep);
 	read_unlock(&sk->sk_callback_lock);
 }
-
+/* 用于唤醒传输控制块的sk_sleep队列中的睡眠进程和通知套接口的fasync_list队列上的进程。是sock->sk_error_report值。
+ * 当传输控制块发生错误时被调用。
+ */
 static void sock_def_error_report(struct sock *sk)
 {
 	read_lock(&sk->sk_callback_lock);
@@ -1416,7 +1448,9 @@ static void sock_def_error_report(struct sock *sk)
 	sk_wake_async(sk,0,POLL_ERR); 
 	read_unlock(&sk->sk_callback_lock);
 }
-
+/* 用于唤醒传输控制块的sk_sleep队列上的睡眠进程和通知套接口的fasync_list队列上的进程。实例:sock->sk_data_ready()
+ * 当接收到数据包，存在可读的数据之后被调用。
+ */
 static void sock_def_readable(struct sock *sk, int len)
 {
 	read_lock(&sk->sk_callback_lock);
@@ -1425,7 +1459,9 @@ static void sock_def_readable(struct sock *sk, int len)
 	sk_wake_async(sk,1,POLL_IN);
 	read_unlock(&sk->sk_callback_lock);
 }
-
+/* 检测已使用的发送缓存区大小，若达到指定值，会唤醒传输控制块的sk_sleep队列上的睡眠进程并通知套接口的fasync_list
+ * 队列上的进程。设置到sock->sk_write_space接口上。通常当传输控制块的发送缓冲区长度的上限做了修改或释放了接收队列上的skb时被调用。
+ */
 static void sock_def_write_space(struct sock *sk)
 {
 	read_lock(&sk->sk_callback_lock);
@@ -1433,6 +1469,7 @@ static void sock_def_write_space(struct sock *sk)
 	/* Do not wake up a writer until he can make "significant"
 	 * progress.  --DaveM
 	 */
+	/* 检测发送并分配的所有skb数据区的总大小是否达到上限 */
 	if((atomic_read(&sk->sk_wmem_alloc) << 1) <= sk->sk_sndbuf) {
 		if (sk->sk_sleep && waitqueue_active(sk->sk_sleep))
 			wake_up_interruptible(sk->sk_sleep);
@@ -1449,7 +1486,7 @@ static void sock_def_destruct(struct sock *sk)
 {
 	kfree(sk->sk_protinfo);
 }
-
+/* 接收到带外数据之后，通知等待处理带外数据的套接口fasync_list队列上的进程。  */
 void sk_send_sigurg(struct sock *sk)
 {
 	if (sk->sk_socket && sk->sk_socket->file)
