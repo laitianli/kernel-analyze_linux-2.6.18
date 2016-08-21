@@ -57,24 +57,25 @@ struct ip_options {
 };
 
 #define optlength(opt) (sizeof(struct ip_options) + opt->optlen)
-
+/* 描述连接双方地址、所支持的TCP选项 */
 struct inet_request_sock {
+	/* 主要描述对端的MSS、本端的接收窗口大小以及控制连接操作信息。eg: 超时时间 */
 	struct request_sock	req;
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	u16			inet6_rsk_offset;
 	/* 2 bytes hole, try to pack */
 #endif
-	u32			loc_addr;
-	u32			rmt_addr;
-	u16			rmt_port;
-	u16			snd_wscale : 4, 
-				rcv_wscale : 4, 
-				tstamp_ok  : 1,
-				sack_ok	   : 1,
-				wscale_ok  : 1,
-				ecn_ok	   : 1,
-				acked	   : 1;
-	struct ip_options	*opt;
+	u32			loc_addr;/* 本地IP地址 */
+	u32			rmt_addr;	/* 对端IP地址 */
+	u16			rmt_port;	/* 对端port */
+	u16			snd_wscale : 4, /* 发送窗口的扩大因子 */
+				rcv_wscale : 4, /* 接收窗口的扩大因子 */
+				tstamp_ok  : 1, /* 标识TCP段是否存在TCP时间戳选项 */
+				sack_ok	   : 1, /* 标识是否支持SACK */
+				wscale_ok  : 1, /* 是否支持窗口扩大因子 */
+				ecn_ok	   : 1, /* 标识是否启用了显示拥塞通知 */
+				acked	   : 1; /* 标识已接收到第三次握手的ACK段，但由于服务器繁忙导致未能建立起连接 */
+	struct ip_options	*opt; /* ip报文选项 */
 };
 
 static inline struct inet_request_sock *inet_rsk(const struct request_sock *sk)

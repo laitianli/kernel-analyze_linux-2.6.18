@@ -2015,6 +2015,12 @@ int tcp_send_synack(struct sock *sk)
 /*
  * Prepare a SYN-ACK.
  */
+/**ltl
+ * 功能: 构造SYN+ACK包
+ * 参数:
+ * 返回值:
+ * 说明: P245
+ */
 struct sk_buff * tcp_make_synack(struct sock *sk, struct dst_entry *dst,
 				 struct request_sock *req)
 {
@@ -2137,7 +2143,13 @@ static void tcp_connect_init(struct sock *sk)
 
 /*
  * Build a SYN and send it off.
- */ 
+ */
+/**ltl
+ * 功能: 构造SYN段，并发送
+ * 参数:
+ * 返回值:
+ * 说明: P272
+ */
 int tcp_connect(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -2241,6 +2253,12 @@ void tcp_send_delayed_ack(struct sock *sk)
 }
 
 /* This routine sends an ack and also updates the window. */
+/**ltl
+ * 功能: 发送一个ACK段，同时更新窗口
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void tcp_send_ack(struct sock *sk)
 {
 	/* If we have been reset, we may not send again. */
@@ -2317,14 +2335,20 @@ static int tcp_xmit_probe_skb(struct sock *sk, int urgent)
 	return tcp_transmit_skb(sk, skb, 0, GFP_ATOMIC);
 }
 
+/**ltl
+ * 功能: 输出持续探测段
+ * 参数:
+ * 返回值:
+ * 说明: 被持续定时器调用
+ */
 int tcp_write_wakeup(struct sock *sk)
 {
 	if (sk->sk_state != TCP_CLOSE) {
 		struct tcp_sock *tp = tcp_sk(sk);
 		struct sk_buff *skb;
-
+		/* 发送队列不为NULL,则利用待发送的段来发送探测包 */
 		if ((skb = sk->sk_send_head) != NULL &&
-		    before(TCP_SKB_CB(skb)->seq, tp->snd_una+tp->snd_wnd)) {
+		    before(TCP_SKB_CB(skb)->seq, tp->snd_una+tp->snd_wnd)) {/* 待发送的段至少有一部分在对方接收窗口内 */
 			int err;
 			unsigned int mss = tcp_current_mss(sk, 0);
 			unsigned int seg_size = tp->snd_una+tp->snd_wnd-TCP_SKB_CB(skb)->seq;
@@ -2348,11 +2372,12 @@ int tcp_write_wakeup(struct sock *sk)
 			TCP_SKB_CB(skb)->flags |= TCPCB_FLAG_PSH;
 			TCP_SKB_CB(skb)->when = tcp_time_stamp;
 			err = tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
-			if (!err) {
+			if (!err) {/* 发送成功，更新发送队首标志 */
 				update_send_head(sk, tp, skb);
 			}
 			return err;
-		} else {
+		} else { 
+			/* 发送队列为NULL情况 */
 			if (tp->urg_mode &&
 			    between(tp->snd_up, tp->snd_una+1, tp->snd_una+0xFFFF))
 				tcp_xmit_probe_skb(sk, TCPCB_URG);
@@ -2365,14 +2390,20 @@ int tcp_write_wakeup(struct sock *sk)
 /* A window probe timeout has occurred.  If window is not closed send
  * a partial packet else a zero probe.
  */
+/**ltl
+ * 功能: 发送探测数据包，并重新设定定时器。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void tcp_send_probe0(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	int err;
-
+	/* 输出持续探测段 */
 	err = tcp_write_wakeup(sk);
-
+	/* 有已发送但未确认的段，或者发送队列为空，无需再次启动定时器。 */
 	if (tp->packets_out || !sk->sk_send_head) {
 		/* Cancel probe timer, if it is not required. */
 		icsk->icsk_probes_out = 0;

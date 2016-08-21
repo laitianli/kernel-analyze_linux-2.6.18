@@ -240,6 +240,12 @@ static inline u32 inet_sk_port_offset(const struct sock *sk)
 /*
  * Bind a port for a connect operation and hash it.
  */
+/**ltl
+ * 功能: 主动连接时动态绑定一个端口
+ * 参数:
+ * 返回值:
+ * 说明: P270
+ */
 int inet_hash_connect(struct inet_timewait_death_row *death_row,
 		      struct sock *sk)
 {

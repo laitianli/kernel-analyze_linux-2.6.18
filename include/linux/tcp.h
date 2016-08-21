@@ -190,10 +190,13 @@ struct tcp_options_received {
 	__u16	user_mss;  	/* mss requested by user in ioctl */
 	__u16	mss_clamp;	/* Maximal mss, negotiated at connection setup */
 };
-
+/* TCP连接请求块，用来保存双方的初始序号、双方端口及IP地址、TCP选项。 */
 struct tcp_request_sock {
+	/* 描述连接双方地址、所支持的TCP选项 */
 	struct inet_request_sock req;
+	/* 客户端的初始序号、接收到客户端连接请求SYN段的序号 */
 	__u32			 rcv_isn;
+	/* 服务端的初始序号，服务端发送SYN+ACK段的序号 */
 	__u32			 snt_isn;
 };
 

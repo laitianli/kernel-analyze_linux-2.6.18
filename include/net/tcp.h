@@ -767,7 +767,12 @@ static inline void tcp_minshall_update(struct tcp_sock *tp, int mss,
 	if (skb->len < mss)
 		tp->snd_sml = TCP_SKB_CB(skb)->end_seq;
 }
-
+/**ltl
+ * 功能: 如果TCP段发送失败，用此函数检测是否需要激活持续定时器。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline void tcp_check_probe_timer(struct sock *sk, struct tcp_sock *tp)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);

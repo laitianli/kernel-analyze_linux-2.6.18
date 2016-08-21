@@ -83,6 +83,7 @@ struct inet_connection_sock_af_ops {
 struct inet_connection_sock {
 	/* inet_sock has to be the first member! */
 	struct inet_sock	  icsk_inet;
+	/* 用来保存正在建立连接和已经建立连接但未被accept的传输控制块 */
 	struct request_sock_queue icsk_accept_queue;
 	struct inet_bind_bucket	  *icsk_bind_hash;
 	unsigned long		  icsk_timeout;
@@ -98,6 +99,7 @@ struct inet_connection_sock {
 	__u8			  icsk_pending;
 	__u8			  icsk_backoff;
 	__u8			  icsk_syn_retries;
+	/* 持续定时器或保活定时器发送出去但没有得到确认的数据包数 */
 	__u8			  icsk_probes_out;
 	__u16			  icsk_ext_hdr_len;
 	struct {
@@ -124,10 +126,13 @@ struct inet_connection_sock {
 	u32			  icsk_ca_priv[16];
 #define ICSK_CA_PRIV_SIZE	(16 * sizeof(u32))
 };
-
+/* 重传定时器 */
 #define ICSK_TIME_RETRANS	1	/* Retransmit timer */
+/* "延时ACK"定时器 */
 #define ICSK_TIME_DACK		2	/* Delayed ack timer */
+/* 0窗口探测定时器 */
 #define ICSK_TIME_PROBE0	3	/* Zero window probe timer */
+/* 保活定时器 */
 #define ICSK_TIME_KEEPOPEN	4	/* Keepalive timer */
 
 static inline struct inet_connection_sock *inet_csk(const struct sock *sk)

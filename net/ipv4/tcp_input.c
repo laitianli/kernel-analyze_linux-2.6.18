@@ -2485,6 +2485,13 @@ static void tcp_process_frto(struct sock *sk, u32 prior_snd_una)
 }
 
 /* This routine deals with incoming acks, but not outgoing ones. */
+/**ltl
+ * 功能: 收到ACK包后的处理
+ * 参数:
+ * 返回值:
+ * 说明: 通常情况下，TCP在接收到ACK后会检测对方的接收窗口大小。此时，如果本端还有段需要发送，则会调用tcp_ack_probe()根据情况确认
+ * 		是否进行零窗口探测。
+ */
 static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
@@ -2581,7 +2588,7 @@ no_queue:
 	 * being used to time the probes, and is probably far higher than
 	 * it needs to be for normal retransmission.
 	 */
-	if (sk->sk_send_head)
+	if (sk->sk_send_head) /* 还有待发送的数据，则需要根据情况确认是否进行零窗口的控制 */
 		tcp_ack_probe(sk);
 	return 1;
 
@@ -2837,7 +2844,7 @@ static void tcp_reset(struct sock *sk)
  *
  *	If we are in FINWAIT-2, a received FIN moves us to TIME-WAIT.
  */
-/* ���յ�FIN�κ�֪ͨ���� */
+/* ?????FIN?κ??????? */
 static void tcp_fin(struct sk_buff *skb, struct sock *sk, struct tcphdr *th)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -4121,7 +4128,12 @@ discard:
 	__kfree_skb(skb);
 	return 0;
 }
-
+/**ltl
+ * 功能: 在SYN_SENT状态下接收到段除了紧急数据
+ * 参数:
+ * 返回值:
+ * 说明: P279
+ */
 static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 					 struct tcphdr *th, unsigned len)
 {
@@ -4370,7 +4382,12 @@ reset_and_undo:
  *	It's called from both tcp_v4_rcv and tcp_v6_rcv and should be
  *	address independent.
  */
-	
+/**ltl
+ * 功能: (三次握手的第一个SYN在此处理)
+ * 参数:
+ * 返回值:
+ * 说明: P236
+ */	
 int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			  struct tcphdr *th, unsigned len)
 {

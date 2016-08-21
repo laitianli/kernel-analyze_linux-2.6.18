@@ -94,7 +94,12 @@ struct inet_hashinfo __cacheline_aligned tcp_hashinfo = {
 	.lhash_users	= ATOMIC_INIT(0),
 	.lhash_wait	= __WAIT_QUEUE_HEAD_INITIALIZER(tcp_hashinfo.lhash_wait),
 };
-
+/**ltl
+ * 功能: 获取端口
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int tcp_v4_get_port(struct sock *sk, unsigned short snum)
 {
 	return inet_csk_get_port(&tcp_hashinfo, sk, snum,
@@ -153,6 +158,12 @@ int tcp_twsk_unique(struct sock *sk, struct sock *sktw, void *twp)
 EXPORT_SYMBOL_GPL(tcp_twsk_unique);
 
 /* This will initiate an outgoing connection. */
+/**ltl
+ * 功能: API connect()的传输层的实现
+ * 参数:
+ * 返回值:
+ * 说明: P266
+ */
 int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 {
 	struct inet_sock *inet = inet_sk(sk);
@@ -232,6 +243,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	 * complete initialization after this.
 	 */
 	tcp_set_state(sk, TCP_SYN_SENT);
+	/* 动态绑定端口 */
 	err = inet_hash_connect(&tcp_death_row, sk);
 	if (err)
 		goto failure;
@@ -251,7 +263,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 							   usin->sin_port);
 
 	inet->id = tp->write_seq ^ jiffies;
-
+	/* 构造SYN段并发送 */
 	err = tcp_connect(sk);
 	rt = NULL;
 	if (err)
@@ -525,7 +537,12 @@ int tcp_v4_gso_send_check(struct sk_buff *skb)
  *		arrived with segment.
  *	Exception: precedence violation. We do not implement it in any case.
  */
-
+/**ltl
+ * 功能: 发送RST段
+ * 参数:
+ * 返回值:
+ * 说明: P259 (RESET)
+ */
 static void tcp_v4_send_reset(struct sk_buff *skb)
 {
 	struct tcphdr *th = skb->h.th;
@@ -571,7 +588,12 @@ static void tcp_v4_send_reset(struct sk_buff *skb)
 /* The code following below sending ACKs in SYN-RECV and TIME-WAIT states
    outside socket context is ugly, certainly. What can I do?
  */
-
+/**ltl
+ * 功能: 向对端发送ACK
+ * 参数:
+ * 返回值:
+ * 说明: P257
+ */
 static void tcp_v4_send_ack(struct sk_buff *skb, u32 seq, u32 ack,
 			    u32 win, u32 ts)
 {
@@ -625,7 +647,12 @@ static void tcp_v4_timewait_ack(struct sock *sk, struct sk_buff *skb)
 
 	inet_twsk_put(tw);
 }
-
+/**ltl
+ * 功能: 用于发送ACK包
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void tcp_v4_reqsk_send_ack(struct sk_buff *skb, struct request_sock *req)
 {
 	tcp_v4_send_ack(skb, tcp_rsk(req)->snt_isn + 1, tcp_rsk(req)->rcv_isn + 1, req->rcv_wnd,
@@ -637,6 +664,12 @@ static void tcp_v4_reqsk_send_ack(struct sk_buff *skb, struct request_sock *req)
  *	This still operates on a request_sock only, not on a big
  *	socket.
  */
+/**ltl
+ * 功能: 用于发送SYN+ACK包
+ * 参数:
+ * 返回值:
+ * 说明: 向客户端回SYN+ACK段
+ */
 static int tcp_v4_send_synack(struct sock *sk, struct request_sock *req,
 			      struct dst_entry *dst)
 {
@@ -645,9 +678,9 @@ static int tcp_v4_send_synack(struct sock *sk, struct request_sock *req,
 	struct sk_buff * skb;
 
 	/* First, grab a route. */
-	if (!dst && (dst = inet_csk_route_req(sk, req)) == NULL)
+	if (!dst && (dst = inet_csk_route_req(sk, req)) == NULL) /* 查找路由缓存项 */
 		goto out;
-
+	/* 构造SYN+ACK包 */
 	skb = tcp_make_synack(sk, dst, req);
 
 	if (skb) {
@@ -881,6 +914,12 @@ drop:
  * The three way handshake has completed - we got a valid synack -
  * now create the new socket.
  */
+/**ltl
+ * 功能: 为新连接创建传输控制块，并初始化。
+ * 参数:
+ * 返回值:
+ * 说明: P255
+ */
 struct sock *tcp_v4_syn_recv_sock(struct sock *sk, struct sk_buff *skb,
 				  struct request_sock *req,
 				  struct dst_entry *dst)
@@ -935,7 +974,12 @@ exit:
 	dst_release(dst);
 	return NULL;
 }
-
+/**ltl
+ * 功能: 处理三次握手的最后一次握手的ACK段
+ * 参数:
+ * 返回值:
+ * 说明: P249
+ */
 static struct sock *tcp_v4_hnd_req(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcphdr *th = skb->h.th;
@@ -996,8 +1040,16 @@ static int tcp_v4_checksum_init(struct sk_buff *skb)
  * This is because we cannot sleep with the original spinlock
  * held.
  */
+/**ltl
+ * 功能:  传输控制块接收到报文的处理函数
+ * 参数:
+ * 返回值:
+ * 说明: 根据不同的状态由不同的函数处理: ESTABLISHED状态处理函数tcp_rcv_established()
+ * 		LISTEN状态且已经建立半连接的处理为tcp_v4_hnd_req()，其他状态处理函数为tcp_rcv_state_process()
+ */
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
+	/* 处于TCP_ESTABLISHED状态的处理 */
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		TCP_CHECK_TIMER(sk);
 		if (tcp_rcv_established(sk, skb, skb->h.th, skb->len))
@@ -1008,9 +1060,9 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 
 	if (skb->len < (skb->h.th->doff << 2) || tcp_checksum_complete(skb))
 		goto csum_err;
-
+	/* 处于TCP_LISTEN状态的处理 */
 	if (sk->sk_state == TCP_LISTEN) {
-		struct sock *nsk = tcp_v4_hnd_req(sk, skb);
+		struct sock *nsk = tcp_v4_hnd_req(sk, skb); /* 处理三次握手的最后一个握手的ACK段 */
 		if (!nsk)
 			goto discard;
 
@@ -1022,6 +1074,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 
 	TCP_CHECK_TIMER(sk);
+	/* TCP_ESTABLISHED和TCP_LISTEN两个状态外的处理函数 */
 	if (tcp_rcv_state_process(sk, skb, skb->h.th, skb->len))
 		goto reset;
 	TCP_CHECK_TIMER(sk);

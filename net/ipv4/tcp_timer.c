@@ -165,7 +165,13 @@ static int tcp_write_timeout(struct sock *sk)
 	}
 	return 0;
 }
-
+/**ltl
+  * 功能: 延迟定时器处理函数
+  * 参数:
+  * 返回值:
+  * 说明: "延迟ACK"定时器在TCP收到必须被确认但无需马上发出确认的段时设定，TCP在200ms后发送确认响应。
+  * 		如果在这200ms内，有数据要在该连接上发送，延时ACK响应就可以随数据一起发送回对端，称为捎带确认。
+  */
 static void tcp_delack_timer(unsigned long data)
 {
 	struct sock *sk = (struct sock*)data;
@@ -173,7 +179,7 @@ static void tcp_delack_timer(unsigned long data)
 	struct inet_connection_sock *icsk = inet_csk(sk);
 
 	bh_lock_sock(sk);
-	if (sock_owned_by_user(sk)) {
+	if (sock_owned_by_user(sk)) { /* 传输控制块已经被用户锁定 */
 		/* Try again later. */
 		icsk->icsk_ack.blocked = 1;
 		NET_INC_STATS_BH(LINUX_MIB_DELAYEDACKLOCKED);
@@ -181,15 +187,16 @@ static void tcp_delack_timer(unsigned long data)
 		goto out_unlock;
 	}
 
-	sk_stream_mem_reclaim(sk);
-
+	sk_stream_mem_reclaim(sk); /* 回收缓存 */
+	/* 控制块处理TCP_CLOSE或者没有开启"延迟ACK"定时器 */
 	if (sk->sk_state == TCP_CLOSE || !(icsk->icsk_ack.pending & ICSK_ACK_TIMER))
 		goto out;
-
+	/* 时间还未到，复位定时器 */
 	if (time_after(icsk->icsk_ack.timeout, jiffies)) {
 		sk_reset_timer(sk, &icsk->icsk_delack_timer, icsk->icsk_ack.timeout);
 		goto out;
 	}
+	/* 清除"延迟ACK"定时器标志ICSK_ACK_TIMER */
 	icsk->icsk_ack.pending &= ~ICSK_ACK_TIMER;
 
 	if (!skb_queue_empty(&tp->ucopy.prequeue)) {
@@ -198,7 +205,7 @@ static void tcp_delack_timer(unsigned long data)
 		NET_INC_STATS_BH(LINUX_MIB_TCPSCHEDULERFAILED);
 
 		while ((skb = __skb_dequeue(&tp->ucopy.prequeue)) != NULL)
-			sk->sk_backlog_rcv(sk, skb);
+			sk->sk_backlog_rcv(sk, skb); /* tcp_v4_do_rcv() */
 
 		tp->ucopy.memory = 0;
 	}
@@ -214,6 +221,7 @@ static void tcp_delack_timer(unsigned long data)
 			icsk->icsk_ack.pingpong = 0;
 			icsk->icsk_ack.ato      = TCP_ATO_MIN;
 		}
+		/* 构造ACK包并发送 */
 		tcp_send_ack(sk);
 		NET_INC_STATS_BH(LINUX_MIB_DELAYEDACKS);
 	}
@@ -226,13 +234,20 @@ out_unlock:
 	bh_unlock_sock(sk);
 	sock_put(sk);
 }
-
+/**ltl
+ * 功能: "持续"定时器处理函数
+ * 参数: 
+ * 返回值:
+ * 说明: 此定时器在对端通告接收窗口为0，阻止TCP继续发送数据时设定。由于连接对端发送的窗口通告不可靠(只有数据才会确认，ACK不会被确认)
+ *      允许TCP继续发送数据的后续窗口更新有可能丢失，因此，如果TCP有数据要发送，而对端通告接收窗口为0，则持续定时启动，超时后向对端发送1B
+ * 		的数据，以判断对端接收窗口是否已打开。
+ */
 static void tcp_probe_timer(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	int max_probes;
-
+	/* 探测数据包在发送的链路上，在等待确认，在确认前无需再发送探测数据包 */
 	if (tp->packets_out || !sk->sk_send_head) {
 		icsk->icsk_probes_out = 0;
 		return;
@@ -254,7 +269,7 @@ static void tcp_probe_timer(struct sock *sk)
 	 * and probe timeout in one bottle.				--ANK
 	 */
 	max_probes = sysctl_tcp_retries2;
-
+	/* 连接已经断开，套接口将关闭 */
 	if (sock_flag(sk, SOCK_DEAD)) {
 		const int alive = ((icsk->icsk_rto << icsk->icsk_backoff) < TCP_RTO_MAX);
  
@@ -263,12 +278,12 @@ static void tcp_probe_timer(struct sock *sk)
 		if (tcp_out_of_resources(sk, alive || icsk->icsk_probes_out <= max_probes))
 			return;
 	}
-
+	/* 发送出去的探测包超出上限，则进行错误处理 */
 	if (icsk->icsk_probes_out > max_probes) {
-		tcp_write_err(sk);
+		tcp_write_err(sk); /* 错误处理 */
 	} else {
 		/* Only send another probe if we didn't close things up. */
-		tcp_send_probe0(sk);
+		tcp_send_probe0(sk); /* 发送探测数据包 */
 	}
 }
 
@@ -442,7 +457,14 @@ void tcp_set_keepalive(struct sock *sk, int val)
 		inet_csk_delete_keepalive_timer(sk);
 }
 
-
+/**ltl
+ * 功能: 保活定时器的处理函数
+ * 参数:
+ * 返回值:
+ * 说明: 保活定时器在APP进程选取了套接口SO_KEEPALIVE时生效。如果连接的连续空闲超过2小时，则保活定时器超时，向对端发送连接探测段，强迫对端响应。
+ *  		如果收到其它响应或者未收么，说明对端已经重启或发生了其它故障。
+ * 注: 此函数是监听定时器、TCP_FIN_WAIT2定时器、保活定时器的处理函数。
+ */
 static void tcp_keepalive_timer (unsigned long data)
 {
 	struct sock *sk = (struct sock *) data;

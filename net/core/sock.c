@@ -1460,8 +1460,8 @@ static void sock_def_readable(struct sock *sk, int len)
 	read_unlock(&sk->sk_callback_lock);
 }
 /* 检测已使用的发送缓存区大小，若达到指定值，会唤醒传输控制块的sk_sleep队列上的睡眠进程并通知套接口的fasync_list
- * 队列上的进程。设置到sock->sk_write_space接口上。通常当传输控制块的发送缓冲区长度的上限做了修改或释放了接收队列上的skb时被调用。
- */
+  * 队列上的进程。设置到sock->sk_write_space接口上。通常当传输控制块的发送缓冲区长度的上限做了修改或释放了接收队列上的skb时被调用。
+  */
 static void sock_def_write_space(struct sock *sk)
 {
 	read_lock(&sk->sk_callback_lock);

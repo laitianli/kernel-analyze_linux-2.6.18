@@ -76,13 +76,13 @@ struct inet_ehash_bucket {
 struct inet_bind_bucket {
 	unsigned short		port;
 	signed short		fastreuse;
-	struct hlist_node	node;
+	struct hlist_node	node; /* 连接件，插入到inet_bind_hashbucket */
 	struct hlist_head	owners;
 };
 
 #define inet_bind_bucket_for_each(tb, node, head) \
 	hlist_for_each_entry(tb, node, head, node)
-
+/* 用来管理已绑定端口, 是inet_bind_bucket的链表头 */
 struct inet_bind_hashbucket {
 	spinlock_t		lock;
 	struct hlist_head	chain;

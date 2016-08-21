@@ -67,8 +67,14 @@ EXPORT_SYMBOL_GPL(inet_csk_bind_conflict);
 /* Obtain a reference to a local port for the given sock,
  * if snum is zero it means select any available local port.
  */
+/**ltl
+ * 功能: bind端口
+ * 参数:
+ * 返回值:
+ * 说明: 1. 如果待绑定的本地端口为0，则自动为套接口分配 一个可用的端口。若指定端口号，则需要在已绑定的信息中查找，找到说明端口已经初始使用。bind()失败
+ */
 int inet_csk_get_port(struct inet_hashinfo *hashinfo,
-		      struct sock *sk, unsigned short snum,
+		      struct sock *sk, unsigned short snum, /* 进行绑定的端口号 */
 		      int (*bind_conflict)(const struct sock *sk,
 					   const struct inet_bind_bucket *tb))
 {
@@ -78,6 +84,7 @@ int inet_csk_get_port(struct inet_hashinfo *hashinfo,
 	int ret;
 
 	local_bh_disable();
+	/* 未指定端口时，分配一个端口 */
 	if (!snum) {
 		int low = sysctl_local_port_range[0];
 		int high = sysctl_local_port_range[1];
@@ -164,6 +171,12 @@ EXPORT_SYMBOL_GPL(inet_csk_get_port);
  * Wait for an incoming connection, avoid race conditions. This must be called
  * with the socket locked.
  */
+/**ltl
+ * 功能:  处理侦听状态的传输控制块在指定的时间内等待新的连接，直接到建立新的连接。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int inet_csk_wait_for_connect(struct sock *sk, long timeo)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
@@ -211,6 +224,12 @@ static int inet_csk_wait_for_connect(struct sock *sk, long timeo)
 /*
  * This will accept the next outstanding connection.
  */
+/**ltl
+ * 功能: accept()系统调用在传输层接口的实现
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 struct sock *inet_csk_accept(struct sock *sk, int flags, int *err)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
@@ -223,23 +242,24 @@ struct sock *inet_csk_accept(struct sock *sk, int flags, int *err)
 	 * and that it has something pending.
 	 */
 	error = -EINVAL;
+	/* accept只针对处于侦听的传输控制块 */
 	if (sk->sk_state != TCP_LISTEN)
 		goto out_err;
-
+	/* 如果accept_queue为NULL,说明还没有收到连接，则将进行阻塞 */
 	/* Find already established connection */
 	if (reqsk_queue_empty(&icsk->icsk_accept_queue)) {
-		long timeo = sock_rcvtimeo(sk, flags & O_NONBLOCK);
+		long timeo = sock_rcvtimeo(sk, flags & O_NONBLOCK); /* 设置了O_NONBLOCK标志，此socket为非阻塞 */
 
 		/* If this is a non blocking socket don't sleep */
 		error = -EAGAIN;
 		if (!timeo)
 			goto out_err;
-
+		/* 等待连接 */
 		error = inet_csk_wait_for_connect(sk, timeo);
 		if (error)
 			goto out_err;
 	}
-
+	/* 从连接队列中的取走第一个连接的请求。 */
 	newsk = reqsk_queue_get_child(&icsk->icsk_accept_queue, sk);
 	BUG_TRAP(newsk->sk_state != TCP_SYN_RECV);
 out:
@@ -308,7 +328,12 @@ void inet_csk_reset_keepalive_timer(struct sock *sk, unsigned long len)
 }
 
 EXPORT_SYMBOL(inet_csk_reset_keepalive_timer);
-
+/**ltl
+ * 功能: 用于查询路由入口
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 struct dst_entry* inet_csk_route_req(struct sock *sk,
 				     const struct request_sock *req)
 {
@@ -545,7 +570,12 @@ void inet_csk_destroy_sock(struct sock *sk)
 }
 
 EXPORT_SYMBOL(inet_csk_destroy_sock);
-
+/**ltl
+ * 功能: 侦听套接口 
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int inet_csk_listen_start(struct sock *sk, const int nr_table_entries)
 {
 	struct inet_sock *inet = inet_sk(sk);
@@ -564,16 +594,16 @@ int inet_csk_listen_start(struct sock *sk, const int nr_table_entries)
 	 * It is OK, because this socket enters to hash table only
 	 * after validation is complete.
 	 */
-	sk->sk_state = TCP_LISTEN;
-	if (!sk->sk_prot->get_port(sk, inet->num)) {
+	sk->sk_state = TCP_LISTEN; /* 状态设置成listen */
+	if (!sk->sk_prot->get_port(sk, inet->num)) { /* 绑定端口。tcp_v4_get_port() */
 		inet->sport = htons(inet->num);
 
-		sk_dst_reset(sk);
-		sk->sk_prot->hash(sk);
+		sk_dst_reset(sk); /* 清除目的路由缓存 */
+		sk->sk_prot->hash(sk); /* 调用tcp_v4_hash()将控制块插入到tcp_hashinfo散列表中 */
 
 		return 0;
 	}
-
+	/* 绑定失败 */
 	sk->sk_state = TCP_CLOSE;
 	__reqsk_queue_destroy(&icsk->icsk_accept_queue);
 	return -EADDRINUSE;

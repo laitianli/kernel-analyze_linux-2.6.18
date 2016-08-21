@@ -185,6 +185,12 @@ static int inet_autobind(struct sock *sk)
 /*
  *	Move a socket into listening state.
  */
+/**ltl
+ * 功能: listen()在传输层的接口实现 
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int inet_listen(struct socket *sock, int backlog)
 {
 	struct sock *sk = sock->sk;
@@ -204,11 +210,12 @@ int inet_listen(struct socket *sock, int backlog)
 	/* Really, if the socket is already in listen state
 	 * we can only allow the backlog to be adjusted.
 	 */
-	if (old_state != TCP_LISTEN) {
+	if (old_state != TCP_LISTEN) {/* 侦听操作 */
 		err = inet_csk_listen_start(sk, TCP_SYNQ_HSIZE);
 		if (err)
 			goto out;
 	}
+	/* 连接队列长度上限 */
 	sk->sk_max_ack_backlog = backlog;
 	err = 0;
 
@@ -515,6 +522,12 @@ static long inet_wait_for_connect(struct sock *sk, long timeo)
  *	Connect to a remote host. There is regrettably still a little
  *	TCP 'magic' in here.
  */
+/**ltl
+ * 功能: API connect()的套接口层的实现
+ * 参数:
+ * 返回值:
+ * 说明: P264发送SYN包，后续的两次握手由协议栈完成，只是等待第三次握手结束
+ */
 int inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 			int addr_len, int flags)
 {
@@ -546,7 +559,7 @@ int inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 		if (sk->sk_state != TCP_CLOSE)
 			goto out;
 
-		err = sk->sk_prot->connect(sk, uaddr, addr_len);
+		err = sk->sk_prot->connect(sk, uaddr, addr_len);/* tcp_v4_connect() */
 		if (err < 0)
 			goto out;
 
@@ -600,12 +613,18 @@ sock_error:
 /*
  *	Accept a pending connection. The TCP layer now gives BSD semantics.
  */
-
+/**ltl
+ * 功能: accept()系统调用在套接口层的实现
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int inet_accept(struct socket *sock, struct socket *newsock, int flags)
 {
 	struct sock *sk1 = sock->sk;
 	int err = -EINVAL;
-	struct sock *sk2 = sk1->sk_prot->accept(sk1, flags, &err);
+	/* 获取已经连接的子传输控制块 */
+	struct sock *sk2 = sk1->sk_prot->accept(sk1, flags, &err); /* inet_csk_accept()系统调用 */
 
 	if (!sk2)
 		goto do_err;
@@ -614,7 +633,7 @@ int inet_accept(struct socket *sock, struct socket *newsock, int flags)
 
 	BUG_TRAP((1 << sk2->sk_state) &
 		 (TCPF_ESTABLISHED | TCPF_CLOSE_WAIT | TCPF_CLOSE));
-
+	/* 关联socket和传输控制块 */
 	sock_graft(sk2, newsock);
 
 	newsock->state = SS_CONNECTED;

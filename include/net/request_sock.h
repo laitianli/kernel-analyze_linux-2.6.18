@@ -25,33 +25,44 @@ struct request_sock;
 struct sk_buff;
 struct dst_entry;
 struct proto;
-
+/* 处理连接请求的函数指针表，包括用于发送SYN+ACK段、ACK段、RST段的函数 */
 struct request_sock_ops {
-	int		family;
+	int		family; /* 所属协议族 */
 	kmem_cache_t	*slab;
 	int		obj_size;
+	/* 发送syn+ack段的函数指针，值: tcp_v4_send_synack() */
 	int		(*rtx_syn_ack)(struct sock *sk,
 				       struct request_sock *req,
 				       struct dst_entry *dst);
+	/* 发送ACK段的函数指针，值: tcp_v4_reqsk_send_ack() */
 	void		(*send_ack)(struct sk_buff *skb,
 				    struct request_sock *req);
+	/* 发送RST段的函数指针，值: tcp_v4_send_reset() */
 	void		(*send_reset)(struct sk_buff *skb);
+	/* 析构函数，tcp_v4_reqsk_destructor() */
 	void		(*destructor)(struct request_sock *req);
 };
 
 /* struct request_sock - mini sock to represent a connection request
  */
 struct request_sock {
+	/* 连接件 */
 	struct request_sock		*dl_next; /* Must be first member! */
-	u16				mss;
-	u8				retrans;
-	u8				__pad;
+	u16				mss; /* 客户端连接请求段中通告的MSS,若无通告，则初始值536 */
+	u8				retrans; /* 重传SYN+ACK段的次数上限，若达到上限，连接取消 */
+	u8				__pad; /* <未使用> */
 	/* The following two fields can be easily recomputed I think -AK */
+	/* 标识本端的最大通行窗口，在生成SYN+ACK段时计算该值 */
 	u32				window_clamp; /* window clamp at creation time */
+	/* 标识在连接建立时本端接收窗口大小，初始化为0，在生成SYN+ACK段时计算该值 */
 	u32				rcv_wnd;	  /* rcv_wnd offered first time */
+	/* 下一个将要发送的ACK中的时间戳值。 */
 	u32				ts_recent;
+	/* 发送了SYN+ACK段后，等待客户回应的超时时间。如果超时就会重发SYN+ACK包，直到重传次数达到上限 */
 	unsigned long			expires;
+	/* 与连接请求的函数指针表 */
 	struct request_sock_ops		*rsk_ops;
+	/* 传输控制块 */
 	struct sock			*sk;
 };
 
@@ -82,15 +93,17 @@ extern int sysctl_max_syn_backlog;
  *
  * @max_qlen_log - log_2 of maximal queued SYNs/REQUESTs
  */
+/* 存储连接请求块，在listen系统调用之后创建 */
 struct listen_sock {
-	u8			max_qlen_log;
+	u8			max_qlen_log; /* nr_table_entries的以2为底的对数值 */
 	/* 3 bytes hole, try to use */
-	int			qlen;
-	int			qlen_young;
+	int			qlen;/* 当前连接请求块数目 */
+	int			qlen_young;/* 当前未重传过SYN+ACK段的请求块数目。 */
 	int			clock_hand;
 	u32			hash_rnd;
+	/* 实际分配用来保存SYN请求连接的request_sock结构数组的长度 */
 	u32			nr_table_entries;
-	struct request_sock	*syn_table[0];
+	struct request_sock	*syn_table[0]; /* 在listen系统调用中生成 */
 };
 
 /** struct request_sock_queue - queue of request_socks
@@ -109,13 +122,15 @@ struct listen_sock {
  * don't need to grab this lock in read mode too as rskq_accept_head. writes
  * are always protected from the main sock lock.
  */
+/* 用于存放连接请求块的容器(处于SYN_RECV状态以及已连接但未被accept的传输控制块) */
 struct request_sock_queue {
+	/* 完成连接后的连接请求块，当执行accept()从listen_opt中移到此链表 */
 	struct request_sock	*rskq_accept_head;
 	struct request_sock	*rskq_accept_tail;
 	rwlock_t		syn_wait_lock;
 	u8			rskq_defer_accept;
 	/* 3 bytes hole, try to pack */
-	struct listen_sock	*listen_opt;
+	struct listen_sock	*listen_opt; /* 该实例在侦听时建立 */
 };
 
 extern int reqsk_queue_alloc(struct request_sock_queue *queue,
@@ -192,7 +207,12 @@ static inline struct request_sock *reqsk_queue_remove(struct request_sock_queue 
 
 	return req;
 }
-
+/**ltl
+ * 功能: 获取已经连接的传输控制块
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline struct sock *reqsk_queue_get_child(struct request_sock_queue *queue,
 						 struct sock *parent)
 {
