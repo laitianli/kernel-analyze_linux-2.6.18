@@ -33,9 +33,9 @@
 #define HAVE_ALLOC_SKB		/* For the drivers to know */
 #define HAVE_ALIGNABLE_SKB	/* Ditto 8)		   */
 
-#define CHECKSUM_NONE 0
-#define CHECKSUM_HW 1
-#define CHECKSUM_UNNECESSARY 2
+#define CHECKSUM_NONE 0 /* 由软件执行校验和 */
+#define CHECKSUM_HW 1 /* 由硬件执行校验和 */
+#define CHECKSUM_UNNECESSARY 2 /* 不需要校验 */
 
 #define SKB_DATA_ALIGN(X)	(((X) + (SMP_CACHE_BYTES - 1)) & \
 				 ~(SMP_CACHE_BYTES - 1))
@@ -105,12 +105,13 @@ struct nf_bridge_info {
 #endif
 
 #endif
-
+/* skb的链表头 */
 struct sk_buff_head {
 	/* These two members must be first. */
+	/* 将skb组成一个双向链表 */
 	struct sk_buff	*next;
 	struct sk_buff	*prev;
-
+	/* 链表长度 */
 	__u32		qlen;
 	spinlock_t	lock;
 };
@@ -131,16 +132,19 @@ struct skb_frag_struct {
 /* This data is invariant across clones and lives at
  * the end of the header data, ie. at skb->end.
  */
+/* 此结构由skb->end指向，用于保存数据块的附加信息 */
 struct skb_shared_info {
-	atomic_t	dataref;
-	unsigned short	nr_frags;
-	unsigned short	gso_size;
+	atomic_t	dataref; /* 引用计数器，用于标识此结构被多少个skb引用 */
+	unsigned short	nr_frags; /* frags数组成员数 */
+	skb_frag_t	frags[MAX_SKB_FRAGS];
+	/* frag_list数组大小 */
+	unsigned short	gso_size; 
 	/* Warning: this field is not always filled in (UFO)! */
 	unsigned short	gso_segs;
 	unsigned short  gso_type;
 	unsigned int    ip6_frag_id;
 	struct sk_buff	*frag_list;
-	skb_frag_t	frags[MAX_SKB_FRAGS];
+	
 };
 
 /* We divide dataref into two halves.  The higher 16 bits hold references
@@ -227,15 +231,23 @@ enum {
  *		done by skb DMA functions
  *	@secmark: security marking
  */
-
+/**ltl
+ * 1.skb内存由两部分组成: 1)用于描述skb描述符；2)用于缓存数据。由->head指向其头部。
+ */
 struct sk_buff {
 	/* These two members must be first. */
+	/* 用于实现skb的双向链表，其链表头是sk_buff_head */
 	struct sk_buff		*next;
 	struct sk_buff		*prev;
-
+	/* 传输控制块对象，只由当此skb包是由宿主机发出或接收时，此成员才有效。而若一个skb包只是对MAC层或IP层时，此域为NULL */
 	struct sock		*sk;
+	/* 接收时间戳或发送时间戳，对于接收，在netif_receive_skb()或netif_rx()中设置 */
 	struct skb_timeval	tstamp;
+	/* 网络设备指针，对于接收的skb，在网卡驱动程序的初始化时，分配skb缓冲区时，将此域指向网卡驱动设备对象；
+	 * 对于发送的skb，此域指向发要送的网卡设备对象
+	 */
 	struct net_device	*dev;
+	/* 接收报文的原始网络设备。此域主要用于流量控制 */
 	struct net_device	*input_dev;
 
 	union {
@@ -246,19 +258,19 @@ struct sk_buff {
 		struct iphdr	*ipiph;
 		struct ipv6hdr	*ipv6h;
 		unsigned char	*raw;
-	} h;
+	} h; /* 指向传输层头部 */
 
 	union {
 		struct iphdr	*iph;
 		struct ipv6hdr	*ipv6h;
 		struct arphdr	*arph;
 		unsigned char	*raw;
-	} nh;
+	} nh; /* 指向网络层头部 */
 
 	union {
 	  	unsigned char 	*raw;
-	} mac;
-
+	} mac; /* 指向链路层头部 */
+	/* 目的路由缓存项。不管是接收还是输入的数据包，都要先查找到对应的目的路由缓存项之后，才能确定数据包的流向，否则只能丢弃。 */
 	struct  dst_entry	*dst;
 	struct	sec_path	*sp;
 
@@ -268,26 +280,29 @@ struct sk_buff {
 	 * want to keep them across layers you have to do a skb_clone()
 	 * first. This is owned by whoever has the skb queued ATM.
 	 */
+	/* 传输控制块，用于每一层协议存储私有信息 */
 	char			cb[48];
-
+	/* len:skb中的数据长度，包括->data指定的数据长度、SG类型的数据长度、FRAGLIST类型的数据长度
+	 * 因为协议栈各层的头部是存放在->data区域，因此从一层传输到另一层时，此域的值都会改变。
+	 */
 	unsigned int		len,
-				data_len,
-				mac_len,
+				data_len, /* SG类型的数据长度+FRAGLIST类型的数据长度 */
+				mac_len,  /* 二层首部长度 */
 				csum;
-	__u32			priority;
-	__u8			local_df:1,
-				cloned:1,
-				ip_summed:2,
-				nohdr:1,
-				nfctinfo:3;
-	__u8			pkt_type:3,
-				fclone:2,
+	__u32			priority; /* 发送或转发数据包的Qos类型 */
+	__u8			local_df:1, /* 本地引用分片 */
+				cloned:1, /* 标记是否已克隆 */
+				ip_summed:2, /* 传输层检验和状态，CHECKSUM_NONE: 由软件计算校验和, CHECKSUM_PARTIAL:由硬件执行校验和 */
+				nohdr:1, /* 标识协议层首部是否用成员h,nh,mac等引用，如果没有，只能通过->data引用协议层首部 */
+				nfctinfo:3; /* 与连接跟踪有关系，用于表示连接状态enum ip_conntrack_info ，在ip_conntrack_in()->resolve_normal_ct()里设置*/
+	__u8			pkt_type:3, /* 帧类型。由eth_type_trans()初始化，值可为PACKET_HOST等。 */
+				fclone:2, /* 当前克隆状态 */
 				ipvs_property:1;
-	__be16			protocol;
+	__be16			protocol; /* 网络层协议类型，值可为ETH_P_IP,ETH_P_ARP等 */
 
 	void			(*destructor)(struct sk_buff *skb);
 #ifdef CONFIG_NETFILTER
-	struct nf_conntrack	*nfct;
+	struct nf_conntrack	*nfct; /* 连接跟踪，在ip_conntrack_in()->resolve_normal_ct()里设置 */
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
 	struct sk_buff		*nfct_reasm;
 #endif
@@ -311,12 +326,15 @@ struct sk_buff {
 
 
 	/* These elements must be at the end, see alloc_skb() for details.  */
+	/* 为此skb分配的内存大小，包括skb描述符和数据缓存区大小 */
 	unsigned int		truesize;
+	/* skb引用计数器，标识多少个实体引用了该skb，用于确定skb的释放时机 */
 	atomic_t		users;
+	/* 以下四个用于指向线性数据缓存区及数据边界 */
 	unsigned char		*head,
-				*data,
-				*tail,
-				*end;
+						*data,
+						*tail,
+						*end; /* ->end指向skb_shared_info */
 };
 
 #ifdef __KERNEL__
@@ -783,7 +801,7 @@ static inline struct sk_buff *__skb_dequeue_tail(struct sk_buff_head *list)
 	return skb;
 }
 
-
+/* 判定是否需要线性化，因为data_len表示SG IO的数据长度，如果此值为0，就说明没有这种数据。  */
 static inline int skb_is_nonlinear(const struct sk_buff *skb)
 {
 	return skb->data_len;
@@ -951,6 +969,12 @@ static inline int skb_tailroom(const struct sk_buff *skb)
  *
  *	Increase the headroom of an empty &sk_buff by reducing the tail
  *	room. This is only allowed for an empty buffer.
+ */
+/**ltl
+ * 功能: skb在往下层传输时，在数据缓冲区头部预留出len的空间。
+ * 参数:
+ * 返回值:
+ * 说明:
  */
 static inline void skb_reserve(struct sk_buff *skb, int len)
 {
@@ -1242,6 +1266,7 @@ static inline int __skb_linearize(struct sk_buff *skb)
  *	If there is no free memory -ENOMEM is returned, otherwise zero
  *	is returned and the old skb data released.
  */
+/* 将skb线性化 */
 static inline int skb_linearize(struct sk_buff *skb)
 {
 	return skb_is_nonlinear(skb) ? __skb_linearize(skb) : 0;

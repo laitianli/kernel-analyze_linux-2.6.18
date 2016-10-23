@@ -264,7 +264,16 @@ static struct sock *udp_v4_lookup_longway(u32 saddr, u16 sport,
 	}
 	return result;
 }
-
+/**ltl
+ * 功能: 根据源IP,源port,目的IP,目的port，网卡编号查找传输控制块对象。
+ * 参数: saddr -> 源IP
+ * 		sport-> 源port
+ * 		daddr-> 目的IP
+ * 		dport-> 目的port
+ * 		dif	-> 网卡编号
+ * 返回值:
+ * 说明: 
+ */
 static __inline__ struct sock *udp_v4_lookup(u32 saddr, u16 sport,
 					     u32 daddr, u16 dport, int dif)
 {
@@ -316,18 +325,24 @@ found:
  * header points to the first 8 bytes of the udp header.  We need
  * to find the appropriate port.
  */
-
+/**ltl
+ * 功能: UDP的差错处理
+ * 参数: skb->接入到的ICMP报文
+ * 		info->
+ * 返回值:
+ * 说明: ICMP模块接收到的差错报文后，如果传输层协议是UDP，就会调用此函数进行处理。
+ */
 void udp_err(struct sk_buff *skb, u32 info)
 {
 	struct inet_sock *inet;
-	struct iphdr *iph = (struct iphdr*)skb->data;
-	struct udphdr *uh = (struct udphdr*)(skb->data+(iph->ihl<<2));
+	struct iphdr *iph = (struct iphdr*)skb->data; /* IP头部 */
+	struct udphdr *uh = (struct udphdr*)(skb->data+(iph->ihl<<2));/*  UDP头部 */
 	int type = skb->h.icmph->type;
 	int code = skb->h.icmph->code;
 	struct sock *sk;
 	int harderr;
 	int err;
-
+	/* 查找传输控制块 */
 	sk = udp_v4_lookup(iph->daddr, uh->dest, iph->saddr, uh->source, skb->dev->ifindex);
 	if (sk == NULL) {
 		ICMP_INC_STATS_BH(ICMP_MIB_INERRORS);
@@ -340,16 +355,16 @@ void udp_err(struct sk_buff *skb, u32 info)
 
 	switch (type) {
 	default:
-	case ICMP_TIME_EXCEEDED:
+	case ICMP_TIME_EXCEEDED: /* 超时差错 */
 		err = EHOSTUNREACH;
 		break;
-	case ICMP_SOURCE_QUENCH:
+	case ICMP_SOURCE_QUENCH: /* 源端初始关闭处理 */
 		goto out;
-	case ICMP_PARAMETERPROB:
+	case ICMP_PARAMETERPROB: /* 参数问题错误 */
 		err = EPROTO;
 		harderr = 1;
 		break;
-	case ICMP_DEST_UNREACH:
+	case ICMP_DEST_UNREACH: /* 目的地不可达错误 */
 		if (code == ICMP_FRAG_NEEDED) { /* Path MTU discovery */
 			if (inet->pmtudisc != IP_PMTUDISC_DONT) {
 				err = EMSGSIZE;
@@ -377,7 +392,7 @@ void udp_err(struct sk_buff *skb, u32 info)
 		ip_icmp_error(sk, skb, err, uh->dest, info, (u8*)(uh+1));
 	}
 	sk->sk_err = err;
-	sk->sk_error_report(sk);
+	sk->sk_error_report(sk); /* 调用sock_def_error_report() */
 out:
 	sock_put(sk);
 }
@@ -774,7 +789,18 @@ static __inline__ int udp_checksum_complete(struct sk_buff *skb)
  * 	This should be easy, if there is something there we
  * 	return it, otherwise we block.
  */
-
+/**ltl
+ * 功能: api recvmsg()在传输层的实现接口，从接收队列读到UDP数据报。
+ * 参数: iocb     ->异步IO控制块，<无用>
+ * 		sk	   ->传输控制块
+ * 		msg	   -> 接收数据的msghdr指针
+ *		len	   ->存放数据的缓冲区大小
+ *		noblock ->是否阻塞读取
+ *		flags   ->接收标记
+ *		addr_len->[out]标志地址信息长度
+ * 返回值:
+ * 说明: 
+ */
 static int udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		       size_t len, int noblock, int flags, int *addr_len)
 {
@@ -793,25 +819,26 @@ static int udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		return ip_recv_error(sk, msg, len);
 
 try_again:
-	skb = skb_recv_datagram(sk, flags, noblock, &err);
+	/* 从接收队列中获取skb对象。 如果没有数据报，则读进程阻塞在这里。 */
+	skb = skb_recv_datagram(sk, flags, noblock, &err); 
 	if (!skb)
 		goto out;
-  
+  	/* skb中的data大小 */
   	copied = skb->len - sizeof(struct udphdr);
-	if (copied > len) {
+	if (copied > len) { /* 数据报的长度大于用户空间缓冲区的长度 */
 		copied = len;
-		msg->msg_flags |= MSG_TRUNC;
+		msg->msg_flags |= MSG_TRUNC; /* 添加MSG_TRUNC标志 */
 	}
-
+	/* 无需校验数据报的拷贝 */
 	if (skb->ip_summed==CHECKSUM_UNNECESSARY) {
 		err = skb_copy_datagram_iovec(skb, sizeof(struct udphdr), msg->msg_iov,
 					      copied);
-	} else if (msg->msg_flags&MSG_TRUNC) {
-		if (__udp_checksum_complete(skb))
+	} else if (msg->msg_flags&MSG_TRUNC) { /* 对MSG_TRUNC标志的处理 */
+		if (__udp_checksum_complete(skb)) /* 校验UDP数据报 */
 			goto csum_copy_err;
 		err = skb_copy_datagram_iovec(skb, sizeof(struct udphdr), msg->msg_iov,
 					      copied);
-	} else {
+	} else {/* 校验UDP数据报的拷贝 */
 		err = skb_copy_and_csum_datagram_iovec(skb, sizeof(struct udphdr), msg->msg_iov);
 
 		if (err == -EINVAL)
@@ -822,7 +849,7 @@ try_again:
 		goto out_free;
 
 	sock_recv_timestamp(msg, sk, skb);
-
+	/* 拷贝地址 */
 	/* Copy the address. */
 	if (sin)
 	{
@@ -831,14 +858,14 @@ try_again:
 		sin->sin_addr.s_addr = skb->nh.iph->saddr;
 		memset(sin->sin_zero, 0, sizeof(sin->sin_zero));
   	}
-	if (inet->cmsg_flags)
+	if (inet->cmsg_flags) /* 获取控制信息 */
 		ip_cmsg_recv(msg, skb);
-
+	/* 设置复制的字节数 */
 	err = copied;
 	if (flags & MSG_TRUNC)
 		err = skb->len - sizeof(struct udphdr);
   
-out_free:
+out_free: /* 释放已经复制的数据报。 */
   	skb_free_datagram(sk, skb);
 out:
   	return err;
@@ -977,6 +1004,12 @@ static int udp_encap_rcv(struct sock * sk, struct sk_buff *skb)
  * Note that in the success and error cases, the skb is assumed to
  * have either been requeued or freed.
  */
+/**ltl
+ * 功能: 将udp数据报插入到接收队列中。
+ * 参数: 
+ * 返回值: 
+ * 说明: 
+ */
 static int udp_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 {
 	struct udp_sock *up = udp_sk(sk);
@@ -984,13 +1017,14 @@ static int udp_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 	/*
 	 *	Charge it to the socket, dropping if the queue is full.
 	 */
-	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb)) {
+	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb)) { /*  安全校验 */
 		kfree_skb(skb);
 		return -1;
-	}
+	} 
+	/* 复位与skb包相关的netfilter */
 	nf_reset(skb);
 
-	if (up->encap_type) {
+	if (up->encap_type) { /* IPSec处理 */
 		/*
 		 * This is an encapsulation socket, so let's see if this is
 		 * an encapsulated packet.
@@ -1002,7 +1036,7 @@ static int udp_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 		 */
 		int ret;
 
-		ret = udp_encap_rcv(sk, skb);
+		ret = udp_encap_rcv(sk, skb); /* IPSec处理 */
 		if (ret == 0) {
 			/* Eat the packet .. */
 			kfree_skb(skb);
@@ -1016,16 +1050,16 @@ static int udp_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 		}
 		/* FALLTHROUGH -- it's a UDP Packet */
 	}
-
+	/* 套接口安装了过滤器，并且需要校验，则校验数据报 */
 	if (sk->sk_filter && skb->ip_summed != CHECKSUM_UNNECESSARY) {
-		if (__udp_checksum_complete(skb)) {
+		if (__udp_checksum_complete(skb)) { 
 			UDP_INC_STATS_BH(UDP_MIB_INERRORS);
 			kfree_skb(skb);
 			return -1;
 		}
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 	}
-
+	/*  插入接收队列 */
 	if (sock_queue_rcv_skb(sk,skb)<0) {
 		UDP_INC_STATS_BH(UDP_MIB_INERRORS);
 		kfree_skb(skb);
@@ -1050,17 +1084,17 @@ static int udp_v4_mcast_deliver(struct sk_buff *skb, struct udphdr *uh,
 	read_lock(&udp_hash_lock);
 	sk = sk_head(&udp_hash[ntohs(uh->dest) & (UDP_HTABLE_SIZE - 1)]);
 	dif = skb->dev->ifindex;
-	sk = udp_v4_mcast_next(sk, uh->dest, daddr, uh->source, saddr, dif);
+	sk = udp_v4_mcast_next(sk, uh->dest, daddr, uh->source, saddr, dif); /* 查找传输控制块 */
 	if (sk) {
 		struct sock *sknext = NULL;
 
 		do {
 			struct sk_buff *skb1 = skb;
-
+			/* 查找下一个传输控制块 */
 			sknext = udp_v4_mcast_next(sk_next(sk), uh->dest, daddr,
 						   uh->source, saddr, dif);
 			if(sknext)
-				skb1 = skb_clone(skb, GFP_ATOMIC);
+				skb1 = skb_clone(skb, GFP_ATOMIC); /* 克隆skb */
 
 			if(skb1) {
 				int ret = udp_queue_rcv_skb(sk, skb1);
@@ -1101,25 +1135,30 @@ static void udp_checksum_init(struct sk_buff *skb, struct udphdr *uh,
 /*
  *	All we need to do is get the socket, and then do a checksum. 
  */
- 
+/**ltl
+ * 功能: 在传输层中，接收UDP数据报的入口
+ * 参数: skb-> 从IP层中接收的udp报文。
+ * 返回值:
+ * 说明: 
+ */
 int udp_rcv(struct sk_buff *skb)
 {
   	struct sock *sk;
   	struct udphdr *uh;
 	unsigned short ulen;
-	struct rtable *rt = (struct rtable*)skb->dst;
-	u32 saddr = skb->nh.iph->saddr;
-	u32 daddr = skb->nh.iph->daddr;
-	int len = skb->len;
+	struct rtable *rt = (struct rtable*)skb->dst; /* 路由缓存对象 */
+	u32 saddr = skb->nh.iph->saddr; /* 源IP */
+	u32 daddr = skb->nh.iph->daddr; /* 目的IP */
+	int len = skb->len; /* UDP数据报的长度， UDP header + data lenght */
 
 	/*
 	 *	Validate the packet and the UDP length.
 	 */
 	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 		goto no_header;
-
+	/* UDP头部 */
 	uh = skb->h.uh;
-
+	/* 将长度转换成主机字节序(记录在UDP头部的数据报长度=UDP header + data len) */
 	ulen = ntohs(uh->len);
 
 	if (ulen > len || ulen < sizeof(*uh))
@@ -1127,16 +1166,16 @@ int udp_rcv(struct sk_buff *skb)
 
 	if (pskb_trim_rcsum(skb, ulen))
 		goto short_packet;
-
+	/* 初始化UDP校验和 */
 	udp_checksum_init(skb, uh, ulen, saddr, daddr);
-
+	/* 组播或广播报文? */
 	if(rt->rt_flags & (RTCF_BROADCAST|RTCF_MULTICAST))
 		return udp_v4_mcast_deliver(skb, uh, saddr, daddr);
-
+	/* 根据五元组信息获取传输控制块 */
 	sk = udp_v4_lookup(saddr, uh->source, daddr, uh->dest, skb->dev->ifindex);
 
 	if (sk != NULL) {
-		int ret = udp_queue_rcv_skb(sk, skb);
+		int ret = udp_queue_rcv_skb(sk, skb); /* 将udp数据报插入到接收队列中 */
 		sock_put(sk);
 
 		/* a return value > 0 means to resubmit the input, but
@@ -1156,7 +1195,8 @@ int udp_rcv(struct sk_buff *skb)
 		goto csum_error;
 
 	UDP_INC_STATS_BH(UDP_MIB_NOPORTS);
-	icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
+	/* 发送不可达报文 */
+	icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0); 
 
 	/*
 	 * Hmm.  We got an UDP packet to a port to which we

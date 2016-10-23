@@ -396,8 +396,10 @@ static inline struct sock *__inet_lookup(struct inet_hashinfo *hashinfo,
 					 const u32 daddr, const u16 hnum,
 					 const int dif)
 {
+	/* 如果有ehash找到传输控制块，则说明已经建立起了三次握手 */
 	struct sock *sk = __inet_lookup_established(hashinfo, saddr, sport, daddr,
 						    hnum, dif);
+	/* 如果在bhash中找到，说明已经绑定端口，处于侦听状态 */
 	return sk ? : inet_lookup_listener(hashinfo, daddr, hnum, dif);
 }
 

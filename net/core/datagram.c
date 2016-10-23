@@ -244,6 +244,12 @@ EXPORT_SYMBOL(skb_kill_datagram);
  *
  *	Note: the iovec is modified during the copy.
  */
+ /**ltl
+ * 功能: 复制报文数据到用户空间。不做校验和检查
+ * 参数:
+ * 返回值:
+ * 说明: 
+ */
 int skb_copy_datagram_iovec(const struct sk_buff *skb, int offset,
 			    struct iovec *to, int len)
 {
@@ -318,7 +324,12 @@ int skb_copy_datagram_iovec(const struct sk_buff *skb, int offset,
 fault:
 	return -EFAULT;
 }
-
+/**ltl
+ * 功能: 复制报文数据到用户空间，复制时进行校验和检查
+ * 参数:
+ * 返回值:
+ * 说明: TCP包要做校验和检查，UDP可以不需要。
+ */
 static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
 				      u8 __user *to, int len,
 				      unsigned int *csump)

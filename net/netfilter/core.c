@@ -57,7 +57,7 @@ EXPORT_SYMBOL_GPL(nf_unregister_afinfo);
 struct list_head nf_hooks[NPROTO][NF_MAX_HOOKS];
 EXPORT_SYMBOL(nf_hooks);
 static DEFINE_SPINLOCK(nf_hook_lock);
-
+/* hook注册函数 */
 int nf_register_hook(struct nf_hook_ops *reg)
 {
 	struct list_head *i;
@@ -112,7 +112,7 @@ void nf_unregister_hooks(struct nf_hook_ops *reg, unsigned int n)
 		nf_unregister_hook(&reg[i]);
 }
 EXPORT_SYMBOL(nf_unregister_hooks);
-
+/* 遍历hook点下的所有hook函数 */
 unsigned int nf_iterate(struct list_head *head,
 			struct sk_buff **skb,
 			int hook,
@@ -154,7 +154,7 @@ unsigned int nf_iterate(struct list_head *head,
 	return NF_ACCEPT;
 }
 
-
+/* 用于执行hook的函数 */
 /* Returns 1 if okfn() needs to be executed by the caller,
  * -EPERM for NF_DROP, 0 otherwise. */
 int nf_hook_slow(int pf, unsigned int hook, struct sk_buff **pskb,

@@ -329,7 +329,7 @@ struct net_device
 	struct net_device	*next_sched;
 
 	/* Interface index. Unique device identifier	*/
-	int			ifindex;
+	int			ifindex; /* Íø¿¨±àºÅ */
 	int			iflink;
 
 

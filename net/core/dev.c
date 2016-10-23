@@ -1416,7 +1416,13 @@ out_kfree_skb:
  *      the BH enable code must have IRQs enabled so that it will not deadlock.
  *          --BLG
  */
-
+/**ltl
+ * 功能: 专门用来发送数据的接口，将skb包发送到具体的网卡上。
+ * 参数: skb->需要发送的数据
+ * 返回值:
+ * 说明: 1.调用网卡驱动的接口将数据发送出去。
+ * 		2.在函数里实现的流量控制
+ */
 int dev_queue_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
@@ -1567,7 +1573,12 @@ DEFINE_PER_CPU(struct netif_rx_stats, netdev_rx_stat) = { 0, };
  *	NET_RX_DROP     (packet was dropped)
  *
  */
-
+/**ltl
+ * 功能: 用于从网卡接收数据,由网卡驱动调用
+ * 参数: skb->从网卡接收到的网络数据包。
+ * 返回值:
+ * 说明: 此函数的下半部由网络接入软中断实现
+ */
 int netif_rx(struct sk_buff *skb)
 {
 	struct softnet_data *queue;
@@ -1596,7 +1607,7 @@ enqueue:
 			local_irq_restore(flags);
 			return NET_RX_SUCCESS;
 		}
-
+		/* 产生网络接收软件中断 */
 		netif_rx_schedule(&queue->backlog_dev);
 		goto enqueue;
 	}
@@ -1899,7 +1910,12 @@ job_done:
 	local_irq_enable();
 	return 0;
 }
-
+/**ltl
+ * 功能: 网络接收软中断NET_RX_SOFTIRQ的处理函数
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void net_rx_action(struct softirq_action *h)
 {
 	struct softnet_data *queue = &__get_cpu_var(softnet_data);
@@ -1921,7 +1937,7 @@ static void net_rx_action(struct softirq_action *h)
 				 struct net_device, poll_list);
 		have = netpoll_poll_lock(dev);
 
-		if (dev->quota <= 0 || dev->poll(dev, &budget)) {
+		if (dev->quota <= 0 || dev->poll(dev, &budget)) { /* poll()==process_backlog() */
 			netpoll_poll_unlock(have);
 			local_irq_disable();
 			list_move_tail(&dev->poll_list, &queue->poll_list);

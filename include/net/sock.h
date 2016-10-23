@@ -959,7 +959,7 @@ extern void sock_init_data(struct socket *sock, struct sock *sk);
  * be accepted or -EPERM if the packet should be tossed.
  *
  */
-
+/* Ö´ĞĞ¹ıÂËÆ÷ */
 static inline int sk_filter(struct sock *sk, struct sk_buff *skb, int needlock)
 {
 	int err;
@@ -994,7 +994,7 @@ static inline int sk_filter(struct sock *sk, struct sk_buff *skb, int needlock)
  *
  *	Remove a filter from a socket and release its resources.
  */
- 
+/* Ğ¶ÔØ¹ıÂËÆ÷ */ 
 static inline void sk_filter_release(struct sock *sk, struct sk_filter *fp)
 {
 	unsigned int size = sk_filter_len(fp);

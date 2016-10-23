@@ -232,7 +232,12 @@ static void sock_disable_timestamp(struct sock *sk)
 	}
 }
 
-
+/**ltl
+ * 功能: 将数据报插入到接收队列中
+ * 参数:
+ * 返回值:
+ * 说明: 1.经过过滤器处理；2.插入到接收队列尾部；3.唤醒读进程。
+ */
 int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
 	int err = 0;
@@ -241,6 +246,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	/* Cast skb->rcvbuf to unsigned... It's pointless, but reduces
 	   number of warnings when compiling with -W --ANK
 	 */
+	/* 读内存池超过上限 */
 	if (atomic_read(&sk->sk_rmem_alloc) + skb->truesize >=
 	    (unsigned)sk->sk_rcvbuf) {
 		err = -ENOMEM;
@@ -251,6 +257,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	   with socket lock! We assume that users of this
 	   function are lock free.
 	*/
+	/* 过滤器 */
 	err = sk_filter(sk, skb, 1);
 	if (err)
 		goto out;
@@ -264,11 +271,11 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	 * from the queue.
 	 */
 	skb_len = skb->len;
-
+	/* 1.在接收队列尾插入skb */
 	skb_queue_tail(&sk->sk_receive_queue, skb);
-
+	/* 2.唤醒读进程, 调用sock_def_readable() */
 	if (!sock_flag(sk, SOCK_DEAD))
-		sk->sk_data_ready(sk, skb_len);
+		sk->sk_data_ready(sk, skb_len); 
 out:
 	return err;
 }
@@ -590,8 +597,8 @@ set_rcvbuf:
 			break;
 		}
 #endif
-
-
+			
+		/* 安装过滤器 */
 		case SO_ATTACH_FILTER:
 			ret = -EINVAL;
 			if (optlen == sizeof(struct sock_fprog)) {
@@ -600,11 +607,11 @@ set_rcvbuf:
 				ret = -EFAULT;
 				if (copy_from_user(&fprog, optval, sizeof(fprog)))
 					break;
-
+				/* 安装过滤器 */
 				ret = sk_attach_filter(&fprog, sk);
 			}
 			break;
-
+		/* 卸载过滤器 */
 		case SO_DETACH_FILTER:
 			spin_lock_bh(&sk->sk_lock.slock);
 			filter = sk->sk_filter;
@@ -1437,8 +1444,9 @@ static void sock_def_wakeup(struct sock *sk)
 		wake_up_interruptible_all(sk->sk_sleep);
 	read_unlock(&sk->sk_callback_lock);
 }
-/* 用于唤醒传输控制块的sk_sleep队列中的睡眠进程和通知套接口的fasync_list队列上的进程。是sock->sk_error_report值。
- * 当传输控制块发生错误时被调用。
+/**ltl 
+ * 功能: 用于唤醒传输控制块的sk_sleep队列中的睡眠进程和通知套接口的fasync_list队列上的进程。是sock->sk_error_report值。
+ * 		当传输控制块发生错误时被调用。
  */
 static void sock_def_error_report(struct sock *sk)
 {

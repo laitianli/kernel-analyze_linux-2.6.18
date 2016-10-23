@@ -6,15 +6,15 @@
 enum ip_conntrack_info
 {
 	/* Part of an established connection (either direction). */
-	IP_CT_ESTABLISHED,
+	IP_CT_ESTABLISHED, /* 数据包是一个已建连接的一部分 */
 
 	/* Like NEW, but related to an existing connection, or ICMP error
 	   (in either direction). */
-	IP_CT_RELATED,
+	IP_CT_RELATED, /* 数据包是一个与已建连接的相关连接 */
 
 	/* Started a new connection to track (only
            IP_CT_DIR_ORIGINAL); may be a retransmission. */
-	IP_CT_NEW,
+	IP_CT_NEW, /* 连立新的连接 */
 
 	/* >= this indicates reply direction */
 	IP_CT_IS_REPLY,

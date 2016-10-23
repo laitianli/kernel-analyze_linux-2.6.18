@@ -188,7 +188,7 @@ ipt_error(struct sk_buff **pskb,
 
 	return NF_DROP;
 }
-
+/* 对skb进行扩展match */
 static inline
 int do_match(struct ipt_entry_match *m,
 	     const struct sk_buff *skb,
@@ -233,7 +233,7 @@ ipt_do_table(struct sk_buff **pskb,
 	struct xt_table_info *private;
 
 	/* Initialization */
-	ip = (*pskb)->nh.iph;
+	ip = (*pskb)->nh.iph; /* 获取skb的ip头部 */
 	datalen = (*pskb)->len - ip->ihl * 4;
 	indev = in ? in->name : nulldevname;
 	outdev = out ? out->name : nulldevname;
@@ -243,13 +243,13 @@ ipt_do_table(struct sk_buff **pskb,
 	 * things we don't know, ie. tcp syn flag or ports).  If the
 	 * rule is also a fragment-specific rule, non-fragments won't
 	 * match it. */
-	offset = ntohs(ip->frag_off) & IP_OFFSET;
+	offset = ntohs(ip->frag_off) & IP_OFFSET; /* 分片的偏移量 */
 
 	read_lock_bh(&table->lock);
 	IP_NF_ASSERT(table->valid_hooks & (1 << hook));
-	private = table->private;
-	table_base = (void *)private->entries[smp_processor_id()];
-	e = get_entry(table_base, private->hook_entry[hook]);
+	private = table->private; /* 获取struct xt_table_info对象 */
+	table_base = (void *)private->entries[smp_processor_id()]; /* 获取规则起始地址 */
+	e = get_entry(table_base, private->hook_entry[hook]); /* 获取hook对应的起始规则地址 */
 
 	/* For return from builtin chain */
 	back = get_entry(table_base, private->underflow[hook]);
@@ -257,24 +257,26 @@ ipt_do_table(struct sk_buff **pskb,
 	do {
 		IP_NF_ASSERT(e);
 		IP_NF_ASSERT(back);
+		/* 1.标准match:匹配IP地址信息 */
 		if (ip_packet_match(ip, indev, outdev, &e->ip, offset)) {
 			struct ipt_entry_target *t;
-
+			/* 2.扩展match */
 			if (IPT_MATCH_ITERATE(e, do_match,
 					      *pskb, in, out,
 					      offset, &hotdrop) != 0)
 				goto no_match;
 
 			ADD_COUNTER(e->counters, ntohs(ip->tot_len), 1);
-
+			/* 获取规则的target */
 			t = ipt_get_target(e);
 			IP_NF_ASSERT(t->u.kernel.target);
 			/* Standard target? */
+			/* 1.标准target */
 			if (!t->u.kernel.target->target) {
 				int v;
 
-				v = ((struct ipt_standard_target *)t)->verdict;
-				if (v < 0) {
+				v = ((struct ipt_standard_target *)t)->verdict; /* 返回-NF_DROP-1或-NF_ACCEPT-1 */
+				if (v < 0) { /* 当是标准target，则走这个流程 */
 					/* Pop from stack? */
 					if (v != IPT_RETURN) {
 						verdict = (unsigned)(-v) - 1;
@@ -297,7 +299,8 @@ ipt_do_table(struct sk_buff **pskb,
 				}
 
 				e = get_entry(table_base, v);
-			} else {
+			}
+			else { /* 扩展target */
 				/* Targets which reenter must return
                                    abs. verdicts */
 #ifdef CONFIG_NETFILTER_DEBUG
@@ -332,12 +335,14 @@ ipt_do_table(struct sk_buff **pskb,
 					/* Verdict */
 					break;
 			}
-		} else {
-
-		no_match:
+		}
+		else 
+		{
+no_match:
 			e = (void *)e + e->next_offset;
 		}
-	} while (!hotdrop);
+	}
+	while (!hotdrop);
 
 	read_unlock_bh(&table->lock);
 
@@ -346,7 +351,8 @@ ipt_do_table(struct sk_buff **pskb,
 #else
 	if (hotdrop)
 		return NF_DROP;
-	else return verdict;
+	else 
+		return verdict;
 #endif
 }
 
@@ -599,7 +605,7 @@ check_entry(struct ipt_entry *e, const char *name, unsigned int size,
 	IPT_MATCH_ITERATE(e, cleanup_match, &j);
 	return ret;
 }
-
+/* 对ipt_entry数据结构进行检查 */
 static inline int
 check_entry_size_and_hooks(struct ipt_entry *e,
 			   struct xt_table_info *newinfo,
@@ -687,6 +693,7 @@ translate_table(const char *name,
 
 	duprintf("translate_table: size %u\n", newinfo->size);
 	i = 0;
+	/* 遍历每一条规则，对每调规则调用check_entry_size_and_hooks进行校验 */
 	/* Walk through entries, checking offsets. */
 	ret = IPT_ENTRY_ITERATE(entry0, newinfo->size,
 				check_entry_size_and_hooks,
@@ -2084,7 +2091,7 @@ do_ipt_get_ctl(struct sock *sk, int cmd, void __user *user, int *len)
 
 	return ret;
 }
-
+/* 对xt_table->private成员的初始化 */
 int ipt_register_table(struct xt_table *table, const struct ipt_replace *repl)
 {
 	int ret;

@@ -76,15 +76,23 @@ struct ipt_ip {
 /* This structure defines each of the firewall rules.  Consists of 3
    parts which are 1) general IP header stuff 2) match specific
    stuff 3) the target to perform if the rule matches */
+/* iptables的一要规则由三部分组成: ipt_entry、ipt_entry_match、ipt_entry_target 
+ * ipt_entry:存放基本规则，如:ip地址
+ * ipt_entry_match:存放扩展规则，0-n个扩展规则
+ * ipt_entry_target:规则的目标，有且仅有一个目标
+ *
+ * 注: 此结构表示一条iptables规则
+ */
 struct ipt_entry
 {
 	struct ipt_ip ip;
 
 	/* Mark with fields that we care about. */
 	unsigned int nfcache;
-
+	/* 指向目标(ipt_entry_target) */
 	/* Size of ipt_entry + matches */
 	u_int16_t target_offset;
+	/* 指向下一条规则的地址(指向ipt_entry) */
 	/* Size of ipt_entry + matches + target */
 	u_int16_t next_offset;
 
@@ -93,7 +101,7 @@ struct ipt_entry
 
 	/* Packet and byte counters. */
 	struct xt_counters counters;
-
+	/* 扩展规则(ipt_entry_match)和目标(ipt_entry_target)的始地址 */
 	/* The matches (if any), then the target. */
 	unsigned char elems[0];
 };
@@ -288,7 +296,7 @@ extern void ipt_unregister_table(struct ipt_table *table);
 
 /* net/sched/ipt.c: Gimme access to your targets!  Gets target->me. */
 extern struct ipt_target *ipt_find_target(const char *name, u8 revision);
-
+/* 表示一条规则数据结构 */
 /* Standard entry. */
 struct ipt_standard
 {

@@ -170,7 +170,12 @@ static void tcp_incr_quickack(struct sock *sk)
 	if (quickacks > icsk->icsk_ack.quick)
 		icsk->icsk_ack.quick = min(quickacks, TCP_MAX_QUICKACKS);
 }
-
+/**ltl P426
+ * 功能: 使传输控制块进入快速确认模式
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void tcp_enter_quickack_mode(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
@@ -405,6 +410,12 @@ static void tcp_rcv_rtt_update(struct tcp_sock *tp, u32 sample, int win_dep)
 		tp->rcv_rtt_est.rtt = new_sample;
 }
 
+/**ltl P402
+ * 功能: 通过调节接收窗口进行流量控制
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline void tcp_rcv_rtt_measure(struct tcp_sock *tp)
 {
 	if (tp->rcv_rtt_est.time == 0)
@@ -2606,6 +2617,12 @@ uninteresting_ack:
  * But, this can also be called on packets in the established flow when
  * the fast version below fails.
  */
+/**ltl
+ * 功能: 全面解释TCP选项
+ * 参数:
+ * 返回值:
+ * 说明: 通常只是在分析SYN和SYN+ACK报文时调用
+ */
 void tcp_parse_options(struct sk_buff *skb, struct tcp_options_received *opt_rx, int estab)
 {
 	unsigned char *ptr;
@@ -3096,6 +3113,12 @@ static void tcp_sack_remove(struct tcp_sock *tp)
 /* This one checks to see if we can put data from the
  * out_of_order queue into the receive_queue.
  */
+/**ltl P419
+ * 功能: 用于处理乱序队列中预期接收的段。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void tcp_ofo_queue(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -3132,7 +3155,13 @@ static void tcp_ofo_queue(struct sock *sk)
 }
 
 static int tcp_prune_queue(struct sock *sk);
-
+/**ltl P411
+ * 功能: 慢速路径的处理函数
+ * 参数:
+ * 返回值:
+ * 说明: 快速路径处理的数据都是预期的，可以直接缓存到接收队列中或直接复制到用户空间。而其他数据是由慢速路径接收处理，
+ * 包括预期的(可以直接缓存 到接收队列中或直接复制到用户空间的数据)、乱序的(序号在接收窗口之内，但不是预期的)、接收窗口之外的数据。
+ */
 static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcphdr *th = skb->h.th;
@@ -3672,7 +3701,12 @@ static inline void tcp_ack_snd_check(struct sock *sk)
  *	For 1003.1g we should support a new option TCP_STDURG to permit
  *	either form (or just set the sysctl tcp_stdurg).
  */
- 
+/**ltl P420
+ * 功能: 用于检测的带外数据是否有效，同时设置带外数据序号以及标志。以便后续根据标志作相应处理。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */ 
 static void tcp_check_urg(struct sock * sk, struct tcphdr * th)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -3740,6 +3774,12 @@ static void tcp_check_urg(struct sock * sk, struct tcphdr * th)
 }
 
 /* This is the 'fast' part of urgent handling. */
+/**ltl
+ * 功能: 带外数据处理
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static void tcp_urg(struct sock *sk, struct sk_buff *skb, struct tcphdr *th)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -3765,6 +3805,12 @@ static void tcp_urg(struct sock *sk, struct sk_buff *skb, struct tcphdr *th)
 	}
 }
 
+/**ltl P398
+ * 功能: 将数据从内核空间复制到用户空间 
+ * 参数: hlen->TCP首部长度
+ * 返回值:
+ * 说明:
+ */
 static int tcp_copy_to_iovec(struct sock *sk, struct sk_buff *skb, int hlen)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -3772,9 +3818,9 @@ static int tcp_copy_to_iovec(struct sock *sk, struct sk_buff *skb, int hlen)
 	int err;
 
 	local_bh_enable();
-	if (skb->ip_summed==CHECKSUM_UNNECESSARY)
+	if (skb->ip_summed==CHECKSUM_UNNECESSARY) /* 直接复制 */
 		err = skb_copy_datagram_iovec(skb, hlen, tp->ucopy.iov, chunk);
-	else
+	else /* 做校验和检查 (TCP包需要校验、UDP则可选)*/
 		err = skb_copy_and_csum_datagram_iovec(skb, hlen,
 						       tp->ucopy.iov);
 
@@ -3875,7 +3921,15 @@ out:
  *	the rest is checked inline. Fast processing is turned on in 
  *	tcp_data_queue when everything is OK.
  */
-int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
+/**ltl P388
+ * 功能: ESTABLISHED状态下的输入处理函数
+ * 参数:
+ * 返回值:
+ * 说明: 为了能高效处理接收到的报文，对TCP段处理提供了两种路径:
+ * 	1.快速路径: 用于处理预期、理想情形下的输入段。在正常情况下，TCP连接最常见的情形该被尽可能地检测并最优化处理，而无需去检测一些边缘的情形。
+ *	2.慢速路径: 用于所有和预期、理想不对应的且需要进行进一步处理的报文。如接收到的段存在除时间戳选项之外选项的段。
+ * 	研究表明: 在局域网内的TCP连接输入的数据95%都执行一快速路径。广域网达到80%
+ */int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			struct tcphdr *th, unsigned len)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -3965,6 +4019,7 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				goto discard;
 			}
 		} else {
+		/* 执行快速路径 */
 			int eaten = 0;
 			int copied_early = 0;
 
@@ -4054,7 +4109,7 @@ no_ack:
 		}
 	}
 
-slow_path:
+slow_path: /*P395 执行慢速路径 */
 	if (len < (th->doff<<2) || tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 

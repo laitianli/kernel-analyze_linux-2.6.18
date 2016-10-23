@@ -71,7 +71,17 @@ do {									\
 #endif
 
 struct ip_conntrack_helper;
-
+/* 连接跟踪数据结构:
+ * 用于记录一个数据包与连接状态的关系 
+ * 在连接跟踪里，收到skb都将ip_conntrack转换成这个数据结构
+ * 注: 入口时创建连接跟踪记录，出口时将该记录加入到连接跟踪表中
+ *     入口流程: 数据包skb->转换成tuple->查找连接跟踪表->调用协议(struct ip_conntrack_protocol)函数packet()->改变连接记录的状态。
+ *     出口流程: 数据包skb->调用协议的helper(可选)->将其加入到连接跟踪表中或者丢弃
+ * 发送给本机的数据包: ip_conntrack_frag()->ip_conntrack_in()->ip_conntrack_help()->ip_confirm->本地进程
+ * 本机转发的数据包: ip_conntrack_frag()->in_conntrack_in()->ip_conntrack_help()->ip_confirm->另一个网卡发出。
+ * 从本机发出的数据包: ip_conntrack_fram()->ip_conntrack_local()->ip_conntrack_help()->ip_confirm()->从网卡发出。
+ *
+ */
 struct ip_conntrack
 {
 	/* Usage count in here is 1 for hash table/destruct timer, 1 per skb,
@@ -128,11 +138,15 @@ struct ip_conntrack
 	/* These are my tuples; original and reply */
 	struct ip_conntrack_tuple_hash tuplehash[IP_CT_DIR_MAX];
 };
-
+/*
+ * 期望连接数据结构，主要用于ftp这种情况: FTP使用21做为命令传输通道，主动模块下，服务器用20端口开始数据传输，被动模块下，
+ * 服务器使用大小1024的随机端口进行数据传输。即不管在什么模块下都使用两个连接。
+ * 期望连接就是一条数据连接与另一条数据连接是关联的
+ */
 struct ip_conntrack_expect
 {
 	/* Internal linked list (global expectation list) */
-	struct list_head list;
+	struct list_head list; /* 连接件: 接入到全局列表ip_conntrack_expect_list中 */
 
 	/* We expect this tuple, with the following mask */
 	struct ip_conntrack_tuple tuple, mask;
@@ -189,6 +203,7 @@ extern int
 ip_conntrack_tuple_taken(const struct ip_conntrack_tuple *tuple,
 			 const struct ip_conntrack *ignored_conntrack);
 
+/* 从skb对象中获取ip_conntrack对象，同时获取连接跟踪状态信息 */
 /* Return conntrack_info and tuple hash for given skb. */
 static inline struct ip_conntrack *
 ip_conntrack_get(const struct sk_buff *skb, enum ip_conntrack_info *ctinfo)

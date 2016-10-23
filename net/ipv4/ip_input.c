@@ -195,11 +195,16 @@ int ip_call_ra_chain(struct sk_buff *skb)
 	read_unlock(&ip_ra_lock);
 	return 0;
 }
-
+/**ltl
+ * 功能: 用于IP层向传输层传送数据。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline int ip_local_deliver_finish(struct sk_buff *skb)
 {
 	int ihl = skb->nh.iph->ihl*4;
-
+	/* 跳过IP头部 */
 	__skb_pull(skb, ihl);
 
         /* Point into the IP datagram, just past the header. */
@@ -208,7 +213,7 @@ static inline int ip_local_deliver_finish(struct sk_buff *skb)
 	rcu_read_lock();
 	{
 		/* Note: See raw.c and net/raw.h, RAWV4_HTABLE_SIZE==MAX_INET_PROTOS */
-		int protocol = skb->nh.iph->protocol;
+		int protocol = skb->nh.iph->protocol; /* IPPROTO_TCP, IPPROTO_UDP */
 		int hash;
 		struct sock *raw_sk;
 		struct net_protocol *ipprot;
@@ -226,14 +231,14 @@ static inline int ip_local_deliver_finish(struct sk_buff *skb)
 		if ((ipprot = rcu_dereference(inet_protos[hash])) != NULL) {
 			int ret;
 
-			if (!ipprot->no_policy) {
+			if (!ipprot->no_policy) { /* 进行IPSec处理 */
 				if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 					kfree_skb(skb);
 					goto out;
 				}
 				nf_reset(skb);
 			}
-			ret = ipprot->handler(skb);
+			ret = ipprot->handler(skb); /* TCP:tcp_v4_rcv() , UDP: udp_rcv()  */
 			if (ret < 0) {
 				protocol = -ret;
 				goto resubmit;
@@ -265,7 +270,7 @@ int ip_local_deliver(struct sk_buff *skb)
 	/*
 	 *	Reassemble IP fragments.
 	 */
-
+	/* 重组分片包 */
 	if (skb->nh.iph->frag_off & htons(IP_MF|IP_OFFSET)) {
 		skb = ip_defrag(skb, IP_DEFRAG_LOCAL_DELIVER);
 		if (!skb)

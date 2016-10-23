@@ -22,7 +22,7 @@
  *	Try and keep these values and structures similar to BSD, especially
  *	the BPF code definitions which need to match so you can share filters
  */
- 
+/* P383 报文过滤数据结构 */
 struct sock_filter	/* Filter block */
 {
         __u16	code;   /* Actual filter code */

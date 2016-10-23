@@ -878,7 +878,12 @@ out_err:
  *	Handle reading urgent data. BSD has very simple semantics for
  *	this, no blocking and very strange errors 8)
  */
-
+/**ltl P422
+ * 功能: 用于从保存在传输控制块中的带外数据读取取用户空间中，在API recv调用时被调用。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static int tcp_recv_urg(struct sock *sk, long timeo,
 			struct msghdr *msg, int len, int flags,
 			int *addr_len)
@@ -1091,7 +1096,12 @@ int tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
  *	tricks with *seq access order and skb->users are not required.
  *	Probably, code can be easily improved even more.
  */
-
+/**ltl P430
+ * 功能: recvmsg系统调用在传输层中的实现
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		size_t len, int nonblock, int flags, int *addr_len)
 {

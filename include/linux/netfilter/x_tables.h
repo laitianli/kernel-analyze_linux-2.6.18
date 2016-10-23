@@ -3,7 +3,11 @@
 
 #define XT_FUNCTION_MAXNAMELEN 30
 #define XT_TABLE_MAXNAMELEN 32
-
+/*
+ * match分为两类: 
+ * 标准match: ipt_ip结构指向的ip信息
+ * 扩展match: -m参数所指定的规则
+ */
 struct xt_entry_match
 {
 	union {
@@ -23,12 +27,17 @@ struct xt_entry_match
 		} kernel;
 
 		/* Total length */
-		u_int16_t match_size;
+		u_int16_t match_size; /* 此条规则match的长度 */
 	} u;
 
 	unsigned char data[0];
 };
-
+/*
+  * target分为两类: 
+  * 标准target: ipt_ip结构指向的ip信息
+  * 扩展target: -m参数所指定的规则
+  * 对于标准的target，struct xt_target为NULL 
+  */
 struct xt_entry_target
 {
 	union {
@@ -53,11 +62,11 @@ struct xt_entry_target
 
 	unsigned char data[0];
 };
-
+/* 标准target */
 struct xt_standard_target
 {
 	struct xt_entry_target target;
-	int verdict;
+	int verdict; /* 此值分别是:NF_DROP,NF_ACCEPT等 */
 };
 
 /* The argument to IPT_SO_GET_REVISION_*.  Returns highest revision
@@ -243,28 +252,28 @@ struct xt_target
 	unsigned short family;
 	u_int8_t revision;
 };
-
+/* iptables表结构 */
 /* Furniture shopping... */
 struct xt_table
 {
-	struct list_head list;
+	struct list_head list; /* 连接件，用于插入到xt_af->table链表中 */
 
 	/* A unique name... */
-	char name[XT_TABLE_MAXNAMELEN];
+	char name[XT_TABLE_MAXNAMELEN]; /* 表名字 */
 
 	/* What hooks you will enter on */
-	unsigned int valid_hooks;
+	unsigned int valid_hooks; /* 此表所检测的hook点 */
 
 	/* Lock for the curtain */
 	rwlock_t lock;
 
 	/* Man behind the curtain... */
 	//struct ip6t_table_info *private;
-	void *private;
+	void *private; /* 描述表的具体属性，指向表的规则信息(struct xt_table_info) */
 
 	/* Set this to THIS_MODULE if you are a module, otherwise NULL */
 	struct module *me;
-
+	/* 协议簇 */
 	int af;		/* address/protocol family */
 };
 
@@ -274,16 +283,16 @@ struct xt_table
 struct xt_table_info
 {
 	/* Size per table */
-	unsigned int size;
+	unsigned int size; /* tables占用的内存空间数 */
 	/* Number of entries: FIXME. --RR */
-	unsigned int number;
+	unsigned int number; /* 表中的规则数 */
 	/* Initial number of entries. Needed for module usage count */
-	unsigned int initial_entries;
-
+	unsigned int initial_entries; /* 初始规则数 */
+	/* 记录hook规则入口相对于entrys变量的偏移量 */
 	/* Entry points and underflows */
 	unsigned int hook_entry[NF_IP_NUMHOOKS];
 	unsigned int underflow[NF_IP_NUMHOOKS];
-
+	/* 指向此表的所有规则的入口。指向struct ipt_entry */
 	/* ipt_entry tables: one per CPU */
 	char *entries[NR_CPUS];
 };

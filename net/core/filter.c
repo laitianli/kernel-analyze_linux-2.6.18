@@ -75,6 +75,12 @@ static inline void *load_pointer(struct sk_buff *skb, int k,
  * filtering, filter is the array of filter instructions, and
  * len is the number of filter blocks in the array.
  */
+/**ltl
+ * 功能: 过滤器的执行
+ * 参数:
+ * 返回值:
+ * 说明: 该函数的实现类似汇编程序的解释器，进行数据的比较等动作
+ */
 unsigned int sk_run_filter(struct sk_buff *skb, struct sock_filter *filter, int flen)
 {
 	struct sock_filter *fentry;	/* We walk down these */
@@ -417,7 +423,7 @@ int sk_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 
 	atomic_set(&fp->refcnt, 1);
 	fp->len = fprog->len;
-
+	/* 交验过滤器 */
 	err = sk_chk_filter(fp->insns, fp->len);
 	if (!err) {
 		struct sk_filter *old_fp;

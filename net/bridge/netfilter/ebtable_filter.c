@@ -29,7 +29,7 @@ static struct ebt_entries initial_chains[] =
 		.policy	= EBT_ACCEPT,
 	},
 };
-
+/* Ä¬ÈÏµÄfilter±í */
 static struct ebt_replace initial_table =
 {
 	.name		= "filter",

@@ -72,19 +72,19 @@ struct ipfrag_skb_cb
 
 #define FRAG_CB(skb)	((struct ipfrag_skb_cb*)((skb)->cb))
 
+#define COMPLETE		4
+#define FIRST_IN		2
+#define LAST_IN			1
 /* Describe an entry in the "incomplete datagrams" queue. */
 struct ipq {
 	struct hlist_node list;
 	struct list_head lru_list;	/* lru list member 			*/
-	u32		user;
+	u32		user; /* 此值为enum ip_defrag_users中的值  */
 	u32		saddr;
 	u32		daddr;
 	u16		id;
 	u8		protocol;
-	u8		last_in;
-#define COMPLETE		4
-#define FIRST_IN		2
-#define LAST_IN			1
+	u8		last_in; /* 值为: COMPLETE或 FIRST_IN LAST_IN */
 
 	struct sk_buff	*fragments;	/* linked list of received fragments	*/
 	int		len;		/* total length of original datagram	*/
@@ -347,6 +347,12 @@ static struct ipq *ip_frag_intern(struct ipq *qp_in)
 	return qp;
 }
 
+/**ltl
+ * 功能: 如果是第一个分片包，则创建一个ipq对象，初始化成员，设置分片超时时间，最后插入到全局hash列表ipq_hash中
+ * 参数:
+ * 返回值: 用于管理一系列分片的对象
+ * 说明:
+ */
 /* Add an entry to the 'ipq' queue for a newly received IP datagram. */
 static struct ipq *ip_frag_create(struct iphdr *iph, u32 user)
 {
@@ -384,6 +390,12 @@ out_nomem:
 /* Find the correct entry in the "incomplete datagrams" queue for
  * this IP datagram, and create new one, if nothing is found.
  */
+/**ltl
+ * 功能: 先在hash列表ipq_hash中查找与分片相对应ipq对象，如果没有查找到，说明此分片是每一个分片，则调用ip_frag_create创建ipq对象
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline struct ipq *ip_find(struct iphdr *iph, u32 user)
 {
 	__be16 id = iph->id;
@@ -396,6 +408,7 @@ static inline struct ipq *ip_find(struct iphdr *iph, u32 user)
 
 	read_lock(&ipfrag_lock);
 	hash = ipqhashfn(id, saddr, daddr, protocol);
+	/* 1.查找hash */
 	hlist_for_each_entry(qp, n, &ipq_hash[hash], list) {
 		if(qp->id == id		&&
 		   qp->saddr == saddr	&&
@@ -408,7 +421,7 @@ static inline struct ipq *ip_find(struct iphdr *iph, u32 user)
 		}
 	}
 	read_unlock(&ipfrag_lock);
-
+	/* 若是第一个分片，则创建新的ipq对象 */
 	return ip_frag_create(iph, user);
 }
 
@@ -461,7 +474,12 @@ static int ip_frag_reinit(struct ipq *qp)
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 将分片插入到ipq列表中
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 /* Add new segment to existing queue. */
 static void ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 {
@@ -479,14 +497,14 @@ static void ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	}
 
  	offset = ntohs(skb->nh.iph->frag_off);
-	flags = offset & ~IP_OFFSET;
-	offset &= IP_OFFSET;
-	offset <<= 3;		/* offset is in 8-byte chunks */
- 	ihl = skb->nh.iph->ihl * 4;
+	flags = offset & ~IP_OFFSET; /* 分片标志 */
+	offset &= IP_OFFSET; /* 分片偏移量 */
+	offset <<= 3;		/* offset is in 8-byte chunks */ /* 实际的偏移量=offset*8 */
+ 	ihl = skb->nh.iph->ihl * 4; /* 数据整片总长度(不是单个分片) */
 
 	/* Determine the position of this fragment. */
- 	end = offset + skb->len - ihl;
-
+ 	end = offset + skb->len - ihl; /* */
+	/* 表示此分片为最后一个分片 */
 	/* Is this the final fragment? */
 	if ((flags & IP_MF) == 0) {
 		/* If we already have some bits beyond end
@@ -495,7 +513,7 @@ static void ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 		if (end < qp->len ||
 		    ((qp->last_in & LAST_IN) && end != qp->len))
 			goto err;
-		qp->last_in |= LAST_IN;
+		qp->last_in |= LAST_IN; /* 设置LAST_IN标志 */
 		qp->len = end;
 	} else {
 		if (end&7) {
@@ -522,6 +540,7 @@ static void ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	 * in the chain of fragments so far.  We must know where to put
 	 * this fragment, right?
 	 */
+	/* 以下代码实现的功能是在qp->fragments列表中找到适当位置，将新的skb插入其中。 */
 	prev = NULL;
 	for(next = qp->fragments; next != NULL; next = next->next) {
 		if (FRAG_CB(next)->offset >= offset)
@@ -594,6 +613,7 @@ static void ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	skb_get_timestamp(skb, &qp->stamp);
 	qp->meat += skb->len;
 	atomic_add(skb->truesize, &ip_frag_mem);
+	/* 偏移量为0,表明此是第一个分片包 */
 	if (offset == 0)
 		qp->last_in |= FIRST_IN;
 
@@ -639,7 +659,7 @@ static struct sk_buff *ip_frag_reasm(struct ipq *qp, struct net_device *dev)
 	if (skb_shinfo(head)->frag_list) {
 		struct sk_buff *clone;
 		int i, plen = 0;
-
+		/* 只分配struct skb_shared_info结构空间 */
 		if ((clone = alloc_skb(0, GFP_ATOMIC)) == NULL)
 			goto out_nomem;
 		clone->next = head->next;
@@ -695,7 +715,13 @@ out_fail:
 	IP_INC_STATS_BH(IPSTATS_MIB_REASMFAILS);
 	return NULL;
 }
-
+/**ltl
+ * 功能: 重组分片包
+ * 参数: skb->分片包skb
+ *		user->enum ip_defrag_users枚举的值
+ * 返回值:
+ * 说明:
+ */
 /* Process an incoming IP datagram fragment. */
 struct sk_buff *ip_defrag(struct sk_buff *skb, u32 user)
 {
@@ -710,13 +736,13 @@ struct sk_buff *ip_defrag(struct sk_buff *skb, u32 user)
 		ip_evictor();
 
 	dev = skb->dev;
-
+	/* 查找或创建ipq */
 	/* Lookup (or create) queue header */
 	if ((qp = ip_find(iph, user)) != NULL) {
 		struct sk_buff *ret = NULL;
 
 		spin_lock(&qp->lock);
-
+		/* 将分片插入到ipq列表中 */
 		ip_frag_queue(qp, skb);
 
 		if (qp->last_in == (FIRST_IN|LAST_IN) &&

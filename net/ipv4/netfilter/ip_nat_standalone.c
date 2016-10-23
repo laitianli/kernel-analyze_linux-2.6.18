@@ -299,7 +299,10 @@ ip_nat_adjust(unsigned int hooknum,
 }
 
 /* We must be after connection tracking and before packet filtering. */
-
+/* nat表的hook函数
+ * NF_IP_PRE_ROUTING、NF_IP_LOCAL_OUT用于目的地址转换
+ * NF_IP_POST_ROUTING、NF_IP_LOCAL_IN用于源地址转换
+ */
 static struct nf_hook_ops ip_nat_ops[] = {
 	/* Before packet filtering, change destination */
 	{
@@ -361,11 +364,13 @@ static int __init ip_nat_standalone_init(void)
 	BUG_ON(ip_nat_decode_session != NULL);
 	ip_nat_decode_session = nat_decode_session;
 #endif
+	/* 注册nat表，及两个目标: DNAT和SNAT */
 	ret = ip_nat_rule_init();
 	if (ret < 0) {
 		printk("ip_nat_init: can't setup rules.\n");
 		goto cleanup_decode_session;
 	}
+	/* 注册nat表的hook函数 */
 	ret = nf_register_hooks(ip_nat_ops, ARRAY_SIZE(ip_nat_ops));
 	if (ret < 0) {
 		printk("ip_nat_init: can't register hooks.\n");

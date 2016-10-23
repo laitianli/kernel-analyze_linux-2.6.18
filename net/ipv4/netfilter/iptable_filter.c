@@ -110,7 +110,7 @@ ipt_local_out_hook(unsigned int hook,
 
 	return ipt_do_table(pskb, hook, in, out, &packet_filter, NULL);
 }
-
+/* 与filter表相关的hook函数 */
 static struct nf_hook_ops ipt_ops[] = {
 	{
 		.hook		= ipt_hook,
@@ -150,12 +150,12 @@ static int __init iptable_filter_init(void)
 
 	/* Entry 1 is the FORWARD hook */
 	initial_table.entries[1].target.verdict = -forward - 1;
-
+	/* 注册filter表 */
 	/* Register table */
 	ret = ipt_register_table(&packet_filter, &initial_table.repl);
 	if (ret < 0)
 		return ret;
-
+	/* filter表的相关hook函数 */
 	/* Register hooks */
 	ret = nf_register_hooks(ipt_ops, ARRAY_SIZE(ipt_ops));
 	if (ret < 0)

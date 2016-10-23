@@ -42,7 +42,15 @@ struct ip_conntrack_manip
 	u_int32_t ip;
 	union ip_conntrack_manip_proto u;
 };
-
+/* 在连接跟踪里，收到skb都将ip_conntrack转换成这个数据结构
+ * 注: 入口时创建连接跟踪记录，出口时将该记录加入到连接跟踪表中
+ *     入口流程: 数据包skb->转换成tuple->查找连接跟踪表->调用协议(struct ip_conntrack_protocol)函数packet()->改变连接记录的状态。
+ *     出口流程: 数据包skb->调用协议的helper(可选)->将其加入到连接跟踪表中或者丢弃
+ * 发送给本机的数据包: ip_conntrack_frag()->ip_conntrack_in()->ip_conntrack_help()->ip_confirm->本地进程
+ * 本机转发的数据包: ip_conntrack_frag()->in_conntrack_in()->ip_conntrack_help()->ip_confirm->另一个网卡发出。
+ * 从本机发出的数据包: ip_conntrack_fram()->ip_conntrack_local()->ip_conntrack_help()->ip_confirm()->从网卡发出。
+ *
+ */
 /* This contains the information to distinguish a connection. */
 struct ip_conntrack_tuple
 {
@@ -74,10 +82,10 @@ struct ip_conntrack_tuple
 		} u;
 
 		/* The protocol. */
-		u_int8_t protonum;
+		u_int8_t protonum; /* 协议号:TCP UDP ICMP */
 
 		/* The direction (for tuplehash) */
-		u_int8_t dir;
+		u_int8_t dir; /* 此值为enum ip_conntrack_dir结构值 */
 	} dst;
 };
 
@@ -103,7 +111,7 @@ DEBUGP("tuple %p: %u %u.%u.%u.%u:%hu -> %u.%u.%u.%u:%hu\n",	\
 /* Connections have two entries in the hash table: one for each way */
 struct ip_conntrack_tuple_hash
 {
-	struct list_head list;
+	struct list_head list; /* 连接件，用于插入到连接跟踪表:ip_conntrack_hash表中  */
 
 	struct ip_conntrack_tuple tuple;
 };

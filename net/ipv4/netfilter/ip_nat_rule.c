@@ -282,7 +282,7 @@ static struct ipt_target ipt_dnat_reg = {
 	.hooks		= (1 << NF_IP_PRE_ROUTING) | (1 << NF_IP_LOCAL_OUT),
 	.checkentry	= ipt_dnat_checkentry,
 };
-
+/* 注册nat表，及两个目标:SNAT和DNAT */
 int __init ip_nat_rule_init(void)
 {
 	int ret;

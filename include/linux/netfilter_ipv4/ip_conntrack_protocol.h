@@ -5,7 +5,9 @@
 #include <linux/netfilter/nfnetlink_conntrack.h>
 
 struct seq_file;
-
+/* 连接跟踪协议数据结构: 每一种协议对应一个连接跟踪
+	
+ */
 struct ip_conntrack_protocol
 {
 	/* Protocol number. */

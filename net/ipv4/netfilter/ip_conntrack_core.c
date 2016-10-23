@@ -68,6 +68,7 @@ struct ip_conntrack_protocol *ip_ct_protos[MAX_IP_CT_PROTO];
 static LIST_HEAD(helpers);
 unsigned int ip_conntrack_htable_size = 0;
 int ip_conntrack_max;
+/* 连接跟踪表 */
 struct list_head *ip_conntrack_hash;
 static kmem_cache_t *ip_conntrack_cachep __read_mostly;
 static kmem_cache_t *ip_conntrack_expect_cachep __read_mostly;
@@ -162,7 +163,7 @@ hash_conntrack(const struct ip_conntrack_tuple *tuple)
 	return __hash_conntrack(tuple, ip_conntrack_htable_size,
 				ip_conntrack_hash_rnd);
 }
-
+/* 根据skb信息，获取struct ip_conntrack_tuple{}结构信息 */
 int
 ip_ct_get_tuple(const struct iphdr *iph,
 		const struct sk_buff *skb,
@@ -181,7 +182,7 @@ ip_ct_get_tuple(const struct iphdr *iph,
 	tuple->dst.ip = iph->daddr;
 	tuple->dst.protonum = iph->protocol;
 	tuple->dst.dir = IP_CT_DIR_ORIGINAL;
-
+	/* UDP:udp_pkt_to_tuple,TCP:tcp_pkt_to_tuple */
 	return protocol->pkt_to_tuple(skb, dataoff, tuple);
 }
 
@@ -696,11 +697,11 @@ init_conntrack(struct ip_conntrack_tuple *tuple,
 		DEBUGP("Can't invert tuple.\n");
 		return NULL;
 	}
-
+	/* 分配连接跟踪对象 */
 	conntrack = ip_conntrack_alloc(tuple, &repl_tuple);
 	if (conntrack == NULL || IS_ERR(conntrack))
 		return (struct ip_conntrack_tuple_hash *)conntrack;
-
+	/* 对udp，new接口没有做什么处理，对TCP则调用tcp_new() */
 	if (!protocol->new(conntrack, skb)) {
 		ip_conntrack_free(conntrack);
 		return NULL;
@@ -747,7 +748,12 @@ init_conntrack(struct ip_conntrack_tuple *tuple,
 
 	return &conntrack->tuplehash[IP_CT_DIR_ORIGINAL];
 }
-
+/**ltl
+ * 功能: 
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 /* On success, returns conntrack ptr, sets skb->nfct and ctinfo */
 static inline struct ip_conntrack *
 resolve_normal_ct(struct sk_buff *skb,
@@ -761,20 +767,21 @@ resolve_normal_ct(struct sk_buff *skb,
 	struct ip_conntrack *ct;
 
 	IP_NF_ASSERT((skb->nh.iph->frag_off & htons(IP_OFFSET)) == 0);
-
+	/* 根据skb字段信息，获取struct ip_conntrack_tuple对象 */
 	if (!ip_ct_get_tuple(skb->nh.iph, skb, skb->nh.iph->ihl*4, 
 				&tuple,proto))
 		return NULL;
-
+	/* 查找连接跟踪的hash */
 	/* look for tuple match */
 	h = ip_conntrack_find_get(&tuple, NULL);
-	if (!h) {
+	if (!h) { /* 没有找到hash，则创建一个新的连接跟踪 */
 		h = init_conntrack(&tuple, proto, skb);
 		if (!h)
 			return NULL;
 		if (IS_ERR(h))
 			return (void *)h;
 	}
+	/* 根据hash，获取对应的连接跟踪对象 */
 	ct = tuplehash_to_ctrack(h);
 
 	/* It exists; we have (non-exclusive) reference. */
@@ -822,7 +829,7 @@ unsigned int ip_conntrack_in(unsigned int hooknum,
 		CONNTRACK_STAT_INC(ignore);
 		return NF_ACCEPT;
 	}
-
+	/* pskb还是一个分片包，则丢弃此包 */
 	/* Never happen */
 	if ((*pskb)->nh.iph->frag_off & htons(IP_OFFSET)) {
 		if (net_ratelimit()) {
@@ -846,19 +853,23 @@ unsigned int ip_conntrack_in(unsigned int hooknum,
 		       (*pskb)->sk, (*pskb)->pkt_type);
 	}
 #endif
-
+	/* 1.根据协议号查找strcut ip_conntrack_procotol对象: ip_conntrack_protocol_tcp、ip_conntrack_protocol_udp、ip_conntrack_protocol_icmp */
 	proto = __ip_conntrack_proto_find((*pskb)->nh.iph->protocol);
 
 	/* It may be an special packet, error, unclean...
 	 * inverse of the return code tells to the netfilter
 	 * core what to do with the packet. */
+	/* 2.使用协议提供的error函数，对skb进行合法性检测 */
 	if (proto->error != NULL 
 	    && (ret = proto->error(*pskb, &ctinfo, hooknum)) <= 0) {
 		CONNTRACK_STAT_INC(error);
 		CONNTRACK_STAT_INC(invalid);
 		return -ret;
 	}
-
+	/**
+	 * 1.调用struct ip_conntrack_protocol->pkt_to_tuple()生成一个struct ip_conntrack_tuple{}对象；
+	 * 2.用struct ip_conntrack_tuple{}查找连接跟踪表，看它是否属于某个tuple_hash{}链(注: 一条连接跟踪由两条ip_conntrack_tuple_hash{}链构成，一"去"一"回")
+	 */
 	if (!(ct = resolve_normal_ct(*pskb, proto,&set_reply,hooknum,&ctinfo))) {
 		/* Not valid part of a connection */
 		CONNTRACK_STAT_INC(invalid);
@@ -872,7 +883,7 @@ unsigned int ip_conntrack_in(unsigned int hooknum,
 	}
 
 	IP_NF_ASSERT((*pskb)->nfct);
-
+	/* 调用struct ip_conntrack_protocol->packet()，如果skb属于连接跟踪，则返回NF_ACCEPT，否则返回-1； */
 	ret = proto->packet(ct, *pskb, ctinfo);
 	if (ret < 0) {
 		/* Invalid: inverse of the return code tells
@@ -1469,7 +1480,7 @@ static int set_hashsize(const char *val, struct kernel_param *kp)
 
 module_param_call(hashsize, set_hashsize, param_get_uint,
 		  &ip_conntrack_htable_size, 0600);
-
+/* 连接跟踪初始化函数 */
 int __init ip_conntrack_init(void)
 {
 	unsigned int i;
@@ -1527,9 +1538,9 @@ int __init ip_conntrack_init(void)
 	for (i = 0; i < MAX_IP_CT_PROTO; i++)
 		ip_ct_protos[i] = &ip_conntrack_generic_protocol;
 	/* Sew in builtin protocols. */
-	ip_ct_protos[IPPROTO_TCP] = &ip_conntrack_protocol_tcp;
-	ip_ct_protos[IPPROTO_UDP] = &ip_conntrack_protocol_udp;
-	ip_ct_protos[IPPROTO_ICMP] = &ip_conntrack_protocol_icmp;
+	ip_ct_protos[IPPROTO_TCP] = &ip_conntrack_protocol_tcp; /* TCP连接跟踪协议 */
+	ip_ct_protos[IPPROTO_UDP] = &ip_conntrack_protocol_udp; /* UDP连接跟踪协议 */
+	ip_ct_protos[IPPROTO_ICMP] = &ip_conntrack_protocol_icmp; /* ICMP连接跟踪 */
 	write_unlock_bh(&ip_conntrack_lock);
 
 	/* For use by ipt_REJECT */

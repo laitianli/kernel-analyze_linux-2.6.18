@@ -4,7 +4,10 @@
 #include <linux/netfilter_ipv4/ip_conntrack.h>
 
 struct module;
-
+/* 连接跟踪的辅助数据结构
+ * 此数据结构的主要运用场景是: 当一个数据包即将离开netfilter框架之前，可以对数据包再做一次处理。
+ * helper模块被注册到低优先级的LOCAL_OUT,POST_ROUTING两个hook点上。 
+ */
 struct ip_conntrack_helper
 {	
 	struct list_head list; 		/* Internal use. */

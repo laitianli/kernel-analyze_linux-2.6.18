@@ -31,12 +31,14 @@ MODULE_AUTHOR("Harald Welte <laforge@netfilter.org>");
 MODULE_DESCRIPTION("[ip,ip6,arp]_tables backend module");
 
 #define SMP_ALIGN(x) (((x) + SMP_CACHE_BYTES-1) & ~(SMP_CACHE_BYTES-1))
-
+/*
+ * 用于存储当前内核可用的所有tables、match、target
+ */
 struct xt_af {
 	struct mutex mutex;
-	struct list_head match;
-	struct list_head target;
-	struct list_head tables;
+	struct list_head match;  /* 每个match都会插入到这里 */
+	struct list_head target; /* 每个target都会插入到这里 */
+	struct list_head tables; /* 每个tables都会插入到这里 */
 	struct mutex compat_mutex;
 };
 
@@ -480,7 +482,9 @@ void xt_compat_unlock(int af)
 }
 EXPORT_SYMBOL_GPL(xt_compat_unlock);
 #endif
-
+/*
+ * 将newinfo对象替换table->private
+ */
 struct xt_table_info *
 xt_replace_table(struct xt_table *table,
 	      unsigned int num_counters,
@@ -508,7 +512,9 @@ xt_replace_table(struct xt_table *table,
 	return oldinfo;
 }
 EXPORT_SYMBOL_GPL(xt_replace_table);
-
+/* 1.用newinfo的信息设置给table->private
+ * 2.将表插入到xt_af全局列表中
+ */
 int xt_register_table(struct xt_table *table,
 		      struct xt_table_info *bootstrap,
 		      struct xt_table_info *newinfo)
@@ -537,7 +543,7 @@ int xt_register_table(struct xt_table *table,
 
 	/* save number of initial entries */
 	private->initial_entries = private->number;
-
+	/* 将表插入到xt_af中 */
 	list_prepend(&xt[table->af].tables, table);
 
 	ret = 0;
@@ -769,7 +775,7 @@ void xt_proto_fini(int af)
 }
 EXPORT_SYMBOL_GPL(xt_proto_fini);
 
-
+/* 用于分配xt_af空间 */
 static int __init xt_init(void)
 {
 	int i;

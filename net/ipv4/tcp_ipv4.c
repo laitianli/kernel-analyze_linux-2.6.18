@@ -1011,7 +1011,7 @@ static struct sock *tcp_v4_hnd_req(struct sock *sk, struct sk_buff *skb)
 #endif
 	return sk;
 }
-
+/* 对TCP包的校验和进行校验 */
 static int tcp_v4_checksum_init(struct sk_buff *skb)
 {
 	if (skb->ip_summed == CHECKSUM_HW) {
@@ -1040,12 +1040,13 @@ static int tcp_v4_checksum_init(struct sk_buff *skb)
  * This is because we cannot sleep with the original spinlock
  * held.
  */
-/**ltl
+/**ltl P381
  * 功能:  传输控制块接收到报文的处理函数
- * 参数:
+ * 参数: 
  * 返回值:
  * 说明: 根据不同的状态由不同的函数处理: ESTABLISHED状态处理函数tcp_rcv_established()
  * 		LISTEN状态且已经建立半连接的处理为tcp_v4_hnd_req()，其他状态处理函数为tcp_rcv_state_process()
+ * 	注: skb传到这里，skb->dev==NULL,在tcp_v4_rcv()中设置
  */
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -1057,7 +1058,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		TCP_CHECK_TIMER(sk);
 		return 0;
 	}
-
+	/* 数据报文长度校验 */
 	if (skb->len < (skb->h.th->doff << 2) || tcp_checksum_complete(skb))
 		goto csum_err;
 	/* 处于TCP_LISTEN状态的处理 */
@@ -1074,7 +1075,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 
 	TCP_CHECK_TIMER(sk);
-	/* TCP_ESTABLISHED和TCP_LISTEN两个状态外的处理函数 */
+	/* TCP_ESTABLISHED和TCP_LISTEN两个状态外的处理函数(TCP_SYN_RECV, TCP_SYN_SENT,TCP_FIN_WAIT1, TCP_FIN_WAIT2, TCP_LAST_ACK, TCP_CLOSING) */
 	if (tcp_rcv_state_process(sk, skb, skb->h.th, skb->len))
 		goto reset;
 	TCP_CHECK_TIMER(sk);
@@ -1099,26 +1100,36 @@ csum_err:
 /*
  *	From tcp_input.c
  */
-
+/**ltl P377
+ * 功能: TCP接收数据入口
+ * 参数:
+ * 返回值:
+ * 说明: 1.如果启用了tcp_low_latency，则将skb插入到接收队列sk_receive_queue中。
+ * 		2.没有启用tcp_low_latency,则将skb插入到prequeue队列中。
+ *		3.如果传输控制块sk被锁住，则将skb插入到后备队列sk_backlog中。
+ */
 int tcp_v4_rcv(struct sk_buff *skb)
 {
 	struct tcphdr *th;
 	struct sock *sk;
 	int ret;
-
+	/* skb不是发送到本地，丢弃此数据包 */
 	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
 
 	/* Count it even if it's bad */
 	TCP_INC_STATS_BH(TCP_MIB_INSEGS);
-
+	/* 如果TCP报文在传输过程中被分片，则达到本地后会在IP层重新组装
+ 	 * 组装完成后，报文分片都存储在分片链表中。此时需要将分片链表复制到线性存储区中，如果发生异常，丢弃报文。
+	 */
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
 		goto discard_it;
 
 	th = skb->h.th;
-
+	/* 如果TCP首部长度字段的值小于不带首部的TCP首部长度，则丢弃 */
 	if (th->doff < sizeof(struct tcphdr) / 4)
 		goto bad_packet;
+	/* 检测整个TCP段长度和TCP首部长度是否正常 */
 	if (!pskb_may_pull(skb, th->doff * 4))
 		goto discard_it;
 
@@ -1126,10 +1137,11 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	 * Packet length and doff are validated by header prediction,
 	 * provided case of th->doff==0 is eliminated.
 	 * So, we defer the checks. */
+	 /* 校验TCP校验和 */
 	if ((skb->ip_summed != CHECKSUM_UNNECESSARY &&
 	     tcp_v4_checksum_init(skb)))
 		goto bad_packet;
-
+	/* 设置TCP私有控制块的值 */
 	th = skb->h.th;
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
@@ -1138,7 +1150,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	TCP_SKB_CB(skb)->when	 = 0;
 	TCP_SKB_CB(skb)->flags	 = skb->nh.iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;
-
+	/* 根据源地址、源端口、目的地址、目的端口查找对应的传输控制块 */
 	sk = __inet_lookup(&tcp_hashinfo, skb->nh.iph->saddr, th->source,
 			   skb->nh.iph->daddr, ntohs(th->dest),
 			   inet_iif(skb));
@@ -1147,21 +1159,21 @@ int tcp_v4_rcv(struct sk_buff *skb)
 		goto no_tcp_socket;
 
 process:
-	if (sk->sk_state == TCP_TIME_WAIT)
+	if (sk->sk_state == TCP_TIME_WAIT) 
 		goto do_time_wait;
-
+	/* 查找IPSec策略数据库。 */
 	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb))
 		goto discard_and_relse;
 	nf_reset(skb);
-
+	/* 初始化与netfilter有关成员 ，只有符合过滤规则的报文才能旅行，不符合的都丢弃 */
 	if (sk_filter(sk, skb, 0))
 		goto discard_and_relse;
-
+	/* 将dev置NULL,因为skb已经到了传输层，dev值不再有意义 */
 	skb->dev = NULL;
-
+	/* 上锁传输控制块 */
 	bh_lock_sock_nested(sk);
 	ret = 0;
-	if (!sock_owned_by_user(sk)) {
+	if (!sock_owned_by_user(sk)) { /* 用户进程没有占用此控制块 */
 #ifdef CONFIG_NET_DMA
 		struct tcp_sock *tp = tcp_sk(sk);
 		if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
@@ -1171,10 +1183,10 @@ process:
 		else
 #endif
 		{
-			if (!tcp_prequeue(sk, skb))
-			ret = tcp_v4_do_rcv(sk, skb);
+			if (!tcp_prequeue(sk, skb))  /* 1.如果未启用了tcp_low_latency，则将skb插入到prequeue队列中 */
+			ret = tcp_v4_do_rcv(sk, skb); /* 2.启用tcp_low_latency，则将skb插入到接收队列sk_receive_queue中 */
 		}
-	} else
+	} else /* 3.传输控制块被用户锁定，则将skb插入到后备队列中 */
 		sk_add_backlog(sk, skb);
 	bh_unlock_sock(sk);
 

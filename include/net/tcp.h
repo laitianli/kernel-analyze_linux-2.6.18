@@ -475,14 +475,19 @@ static inline void tcp_fast_path_on(struct tcp_sock *tp)
 {
 	__tcp_fast_path_on(tp, tp->snd_wnd >> tp->rx_opt.snd_wscale);
 }
-
+/**ltl P389
+ * 功能: 设置预测标志
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static inline void tcp_fast_path_check(struct sock *sk, struct tcp_sock *tp)
 {
-	if (skb_queue_empty(&tp->out_of_order_queue) &&
-	    tp->rcv_wnd &&
-	    atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf &&
-	    !tp->urg_data)
-		tcp_fast_path_on(tp);
+	if (skb_queue_empty(&tp->out_of_order_queue) && /* 缓存乱序队列为NULL,说明网络比较畅通 */
+	    tp->rcv_wnd &&	/* 接收窗口不为0，说明还有接收数据报文的能力 */
+	    atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf && /* 接收缓冲还未达到上限 */
+	    !tp->urg_data) /* 没有接收到紧急指针，快速路径不处理带外数据 */
+		tcp_fast_path_on(tp); /* 设置预测标识 */
 }
 
 /* Compute the actual receive window we are currently advertising.
@@ -842,28 +847,35 @@ static inline void tcp_prequeue_init(struct tcp_sock *tp)
  *
  * NOTE: is this not too big to inline?
  */
+/**ltl P380
+ * 功能: 将skb插入到prequeue队列中
+ * 参数:
+ * 返回值:
+ * 说明: 在未启用tcp_low_latency的情况下，如果用户进程正在读取数据，则将接收到的TCP段直接加入到prequeue队列中。
+ */
 static inline int tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-
+	/* 1.未启用tcp_low_latency; 2.用户进程正在读数 */
 	if (!sysctl_tcp_low_latency && tp->ucopy.task) {
-		__skb_queue_tail(&tp->ucopy.prequeue, skb);
-		tp->ucopy.memory += skb->truesize;
-		if (tp->ucopy.memory > sk->sk_rcvbuf) {
+		__skb_queue_tail(&tp->ucopy.prequeue, skb); /* 将skb插入到prequeue队列中 */
+		tp->ucopy.memory += skb->truesize; /* 更新消耗内存大小 */
+		if (tp->ucopy.memory > sk->sk_rcvbuf) { /* 接收队列超出了上限 */
 			struct sk_buff *skb1;
 
 			BUG_ON(sock_owned_by_user(sk));
-
+			/* 立即处理prequeue队列上的报文 */
 			while ((skb1 = __skb_dequeue(&tp->ucopy.prequeue)) != NULL) {
 				sk->sk_backlog_rcv(sk, skb1);
 				NET_INC_STATS_BH(LINUX_MIB_TCPPREQUEUEDROPPED);
 			}
 
 			tp->ucopy.memory = 0;
-		} else if (skb_queue_len(&tp->ucopy.prequeue) == 1) {
-			wake_up_interruptible(sk->sk_sleep);
-			if (!inet_csk_ack_scheduled(sk))
-				inet_csk_reset_xmit_timer(sk, ICSK_TIME_DACK,
+		} else if (skb_queue_len(&tp->ucopy.prequeue) == 1) { /* prequeue队列中只存在一个skb */
+			/* prequeue队列中的skb消耗内存没有达到上限 */
+			wake_up_interruptible(sk->sk_sleep); /* 唤醒用户进程去读取数据 */
+			if (!inet_csk_ack_scheduled(sk)) /* 不需要发送ack */
+				inet_csk_reset_xmit_timer(sk, ICSK_TIME_DACK, /* 复位重新启动延迟确认定时器 */
 						          (3 * TCP_RTO_MIN) / 4,
 							  TCP_RTO_MAX);
 		}

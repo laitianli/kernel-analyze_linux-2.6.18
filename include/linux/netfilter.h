@@ -49,24 +49,33 @@ extern void netfilter_init(void);
 
 struct sk_buff;
 struct net_device;
-
+/* 功能: hook回调函数
+ * 参数: hooknum->hook点
+ *		skb ->数据包
+ *		in	->数据包的入口设备对象
+ *		out	->数据包的出口设备对象
+ *		okfn	->
+ *
+ * 返回值:
+ * 说明:
+ */
 typedef unsigned int nf_hookfn(unsigned int hooknum,
 			       struct sk_buff **skb,
 			       const struct net_device *in,
 			       const struct net_device *out,
 			       int (*okfn)(struct sk_buff *));
-
+/* hook点函数的数据结构 */
 struct nf_hook_ops
 {
-	struct list_head list;
+	struct list_head list;  /* 连接件，用于将同一个hook点连接成一个链表 */
 
 	/* User fills in from here down. */
-	nf_hookfn *hook;
+	nf_hookfn *hook;	/* hook函数 */
 	struct module *owner;
-	int pf;
-	int hooknum;
+	int pf;	/* 协议号 */
+	int hooknum; /* hook点 */
 	/* Hooks are ordered in ascending priority. */
-	int priority;
+	int priority; /* 优先级 */
 };
 
 struct nf_sockopt_ops

@@ -399,7 +399,15 @@ static struct file_operations ct_cpu_seq_fops = {
 	.release = seq_release_private,
 };
 #endif
-
+/**ltl
+ * 功能: 拿到连接跟踪为该数据包生成ip_conntrack{}对象，根据连接"来"、"去"方向tuple计算其hash值，
+ * 		然后在连接跟踪表ip_conntrack_hash[]见上图中查找是否已存在该tuple。如果已存在，该函数最后返回NF_DROP；
+ * 		如果不存在，则将该连接"来"、"去"方向tuple插入到连接跟踪表ip_conntrack_hash[]里，并向Netfilter框架返回NF_ACCEPT。
+ *		之所以要再最后才将连接跟踪记录加入连接跟踪表是考虑到数据包可能被过滤掉。
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static unsigned int ip_confirm(unsigned int hooknum,
 			       struct sk_buff **pskb,
 			       const struct net_device *in,
@@ -409,7 +417,12 @@ static unsigned int ip_confirm(unsigned int hooknum,
 	/* We've seen it coming out the other side: confirm it */
 	return ip_conntrack_confirm(pskb);
 }
-
+/**ltl
+ * 功能: 提供对skb进行再次过滤的功能。
+ * 参数:
+ * 返回值:
+ * 说明: 1.看连接跟踪是否有struct ip_conntrack_helper{},如果有调用其help()函数
+ */
 static unsigned int ip_conntrack_help(unsigned int hooknum,
 				      struct sk_buff **pskb,
 				      const struct net_device *in,
@@ -429,7 +442,14 @@ static unsigned int ip_conntrack_help(unsigned int hooknum,
 	}
 	return NF_ACCEPT;
 }
-
+/**ltl
+ * 功能: 在netfilter子系统中用于将分片重组
+ * 参数:
+ * 返回值:
+ * 说明: 在netfilter子系统中的所有hook函数里，这个函数的优先级是最高的。
+ * 		因此所有的skb都先经过此hook函数处理后，才会轮到其它hook函数处理。
+ * 		连接跟踪只跟踪完整的ip包，对分片包不跟踪。
+ */
 static unsigned int ip_conntrack_defrag(unsigned int hooknum,
 				        struct sk_buff **pskb,
 				        const struct net_device *in,
@@ -442,14 +462,14 @@ static unsigned int ip_conntrack_defrag(unsigned int hooknum,
 	if ((*pskb)->nfct)
 		return NF_ACCEPT;
 #endif
-
+	/* MF(More fragments): 标志位为1，或者分片包偏移量不为0，说明此包都是分片包。 */
 	/* Gather fragments. */
 	if ((*pskb)->nh.iph->frag_off & htons(IP_MF|IP_OFFSET)) {
 		*pskb = ip_ct_gather_frags(*pskb,
 		                           hooknum == NF_IP_PRE_ROUTING ? 
 					   IP_DEFRAG_CONNTRACK_IN :
 					   IP_DEFRAG_CONNTRACK_OUT);
-		if (!*pskb)
+		if (!*pskb) /* 表此pskb是一个分片包，并且不是最后一个分片包 */
 			return NF_STOLEN;
 	}
 	return NF_ACCEPT;
