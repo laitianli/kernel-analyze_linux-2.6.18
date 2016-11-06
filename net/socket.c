@@ -903,6 +903,7 @@ static long sock_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 		case SIOCGPGRP:
 			err = put_user(sock->file->f_owner.pid, (int __user *)argp);
 			break;
+			/* 与网桥相关的ioctl */
 		case SIOCGIFBR:
 		case SIOCSIFBR:
 		case SIOCBRADDBR:
@@ -912,7 +913,7 @@ static long sock_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 				request_module("bridge");
 
 			mutex_lock(&br_ioctl_mutex);
-			if (br_ioctl_hook) 
+			if (br_ioctl_hook) /* br_ioctl_deviceless_stub() */
 				err = br_ioctl_hook(cmd, argp);
 			mutex_unlock(&br_ioctl_mutex);
 			break;

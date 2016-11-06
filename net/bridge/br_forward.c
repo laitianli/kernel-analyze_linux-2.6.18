@@ -31,7 +31,7 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 {
 	return skb->len - (skb->protocol == htons(ETH_P_8021Q) ? VLAN_HLEN : 0);
 }
-
+/* 将报文发给网口 */
 int br_dev_queue_push_xmit(struct sk_buff *skb)
 {
 	/* drop mtu oversized packets except gso */
@@ -46,7 +46,7 @@ int br_dev_queue_push_xmit(struct sk_buff *skb)
 #endif
 		{
 			skb_push(skb, ETH_HLEN);
-
+		
 			dev_queue_xmit(skb);
 		}
 	}
@@ -67,7 +67,7 @@ static void __br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 	NF_HOOK(PF_BRIDGE, NF_BR_LOCAL_OUT, skb, NULL, skb->dev,
 			br_forward_finish);
 }
-
+/* 转发skb报文 */
 static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 {
 	struct net_device *indev;
@@ -79,7 +79,7 @@ static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 	NF_HOOK(PF_BRIDGE, NF_BR_FORWARD, skb, indev, skb->dev,
 			br_forward_finish);
 }
-
+/* 通过某一端口发送报文 */
 /* called with rcu_read_lock */
 void br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 {
@@ -90,10 +90,11 @@ void br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 
 	kfree_skb(skb);
 }
-
+/* 转发skb */
 /* called with rcu_read_lock */
 void br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 {
+	/* skb不能再向接收的网口发关，should_deliver()正是此功能，skb->dev和端口的dev不能相等。 */
 	if (should_deliver(to, skb)) {
 		__br_forward(to, skb);
 		return;
@@ -101,7 +102,7 @@ void br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 
 	kfree_skb(skb);
 }
-
+/* 遍历网桥下的所有端口，并通过此端口将报文转发出去。 */
 /* called under bridge lock */
 static void br_flood(struct net_bridge *br, struct sk_buff *skb, int clone,
 	void (*__packet_hook)(const struct net_bridge_port *p, 
@@ -122,7 +123,7 @@ static void br_flood(struct net_bridge *br, struct sk_buff *skb, int clone,
 	}
 
 	prev = NULL;
-
+	/* 遍历网桥下的端口列表 */
 	list_for_each_entry_rcu(p, &br->port_list, list) {
 		if (should_deliver(p, skb)) {
 			if (prev != NULL) {
@@ -133,7 +134,7 @@ static void br_flood(struct net_bridge *br, struct sk_buff *skb, int clone,
 					kfree_skb(skb);
 					return;
 				}
-
+				/* 通过端口发送报文 */
 				__packet_hook(prev, skb2);
 			}
 
@@ -149,13 +150,13 @@ static void br_flood(struct net_bridge *br, struct sk_buff *skb, int clone,
 	kfree_skb(skb);
 }
 
-
+/* 用于网络层向网桥发送skb报文，会向所有的端口发送 */
 /* called with rcu_read_lock */
 void br_flood_deliver(struct net_bridge *br, struct sk_buff *skb, int clone)
 {
 	br_flood(br, skb, clone, __br_deliver);
 }
-
+/* 当报文从某一网卡接收后，查找TAC表后，通过此接口向网桥的其它所有端口发送报文。 */
 /* called under bridge lock */
 void br_flood_forward(struct net_bridge *br, struct sk_buff *skb, int clone)
 {

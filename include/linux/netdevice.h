@@ -513,7 +513,7 @@ struct net_device
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	void                    (*poll_controller)(struct net_device *dev);
 #endif
-
+	/* 当此网络设备做为网桥的端口，则设置此字段,在函数br_add_if()中设置 */
 	/* bridge stuff */
 	struct net_bridge_port	*br_port;
 

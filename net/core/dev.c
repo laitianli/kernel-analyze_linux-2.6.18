@@ -1709,13 +1709,18 @@ struct net_bridge;
 struct net_bridge_fdb_entry *(*br_fdb_get_hook)(struct net_bridge *br,
 						unsigned char *addr);
 void (*br_fdb_put_hook)(struct net_bridge_fdb_entry *ent);
-
+/**ltl
+ * 功能: 网桥的处理函数
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static __inline__ int handle_bridge(struct sk_buff **pskb,
 				    struct packet_type **pt_prev, int *ret,
 				    struct net_device *orig_dev)
 {
 	struct net_bridge_port *port;
-
+	/* 若是回环数据包，或是网络设备的端口成员没有设置，说明此接口不是网桥中的某一端口 */
 	if ((*pskb)->pkt_type == PACKET_LOOPBACK ||
 	    (port = rcu_dereference((*pskb)->dev->br_port)) == NULL)
 		return 0;
@@ -1724,7 +1729,7 @@ static __inline__ int handle_bridge(struct sk_buff **pskb,
 		*ret = deliver_skb(*pskb, *pt_prev, orig_dev);
 		*pt_prev = NULL;
 	} 
-	
+	/* 调用br_handle_frame() */
 	return br_handle_frame_hook(port, pskb);
 }
 #else
@@ -1768,7 +1773,12 @@ static int ing_filter(struct sk_buff *skb)
 	return result;
 }
 #endif
-
+/**ltl
+ * 功能: 从网络软中断处理函数中接收数据
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int netif_receive_skb(struct sk_buff *skb)
 {
 	struct packet_type *ptype, *pt_prev;
@@ -1806,7 +1816,7 @@ int netif_receive_skb(struct sk_buff *skb)
 		goto ncls;
 	}
 #endif
-
+	/* 若注册了AF_PACKET协议的接收函数，则向其拷贝数据(抓包软件就走的这个流程) */
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
 		if (!ptype->dev || ptype->dev == skb->dev) {
 			if (pt_prev) 
@@ -1835,10 +1845,10 @@ ncls:
 #endif
 
 	handle_diverter(skb);
-
+	/* 从网卡接收数据，并交给网桥的处理 */
 	if (handle_bridge(&skb, &pt_prev, &ret, orig_dev))
 		goto out;
-
+	/* 向网络层传递数据 */
 	type = skb->protocol;
 	list_for_each_entry_rcu(ptype, &ptype_base[ntohs(type)&15], list) {
 		if (ptype->type == type &&

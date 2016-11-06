@@ -256,7 +256,7 @@ int br_fdb_fillbuf(struct net_bridge *br, void *buf,
 
 	return num;
 }
-
+/* 根据MAC查找端口 */
 static inline struct net_bridge_fdb_entry *fdb_find(struct hlist_head *head,
 						    const unsigned char *addr)
 {
@@ -269,20 +269,22 @@ static inline struct net_bridge_fdb_entry *fdb_find(struct hlist_head *head,
 	}
 	return NULL;
 }
-
+/* 创建映射表项，并插入到TAC表中 */
 static struct net_bridge_fdb_entry *fdb_create(struct hlist_head *head,
 					       struct net_bridge_port *source,
 					       const unsigned char *addr, 
 					       int is_local)
 {
 	struct net_bridge_fdb_entry *fdb;
-
+	/* 分配映射表项 */
 	fdb = kmem_cache_alloc(br_fdb_cache, GFP_ATOMIC);
 	if (fdb) {
+		/*MAC地址 */
 		memcpy(fdb->addr.addr, addr, ETH_ALEN);
 		atomic_set(&fdb->use_count, 1);
+		/* 将映射表项插入到TAC表中 */
 		hlist_add_head_rcu(&fdb->hlist, head);
-
+		/* 端口 */
 		fdb->dst = source;
 		fdb->is_local = is_local;
 		fdb->is_static = is_local;
@@ -290,16 +292,16 @@ static struct net_bridge_fdb_entry *fdb_create(struct hlist_head *head,
 	}
 	return fdb;
 }
-
+/* 将映射表项插入到TAC表中 */
 static int fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 		  const unsigned char *addr)
 {
 	struct hlist_head *head = &br->hash[br_mac_hash(addr)];
 	struct net_bridge_fdb_entry *fdb;
-
+	/* MAC地址是否有效 */
 	if (!is_valid_ether_addr(addr))
 		return -EINVAL;
-
+	/* 查找映射表 */
 	fdb = fdb_find(head, addr);
 	if (fdb) {
 		/* it is okay to have multiple ports with same 
@@ -313,13 +315,18 @@ static int fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 		       source->dev->name);
 		fdb_delete(fdb);
  	}
-
+	/* 创建映射表项，并插入到TAC表 */
 	if (!fdb_create(head, source, addr, 1))
 		return -ENOMEM;
 
 	return 0;
 }
-
+/**ltl
+ * 功能: 向TAC表插入表项
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int br_fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 		  const unsigned char *addr)
 {
@@ -330,17 +337,23 @@ int br_fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 	spin_unlock_bh(&br->hash_lock);
 	return ret;
 }
-
+/**ltl
+ * 功能: 利用报文的源MAC和接收此报文的端口更新TAC表项
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 		   const unsigned char *addr)
 {
+	/* 获取hash链表 */
 	struct hlist_head *head = &br->hash[br_mac_hash(addr)];
 	struct net_bridge_fdb_entry *fdb;
 
 	/* some users want to always flood. */
 	if (hold_time(br) == 0)
 		return;
-
+	/* 查找表项 */
 	fdb = fdb_find(head, addr);
 	if (likely(fdb)) {
 		/* attempt to update an entry for a local interface */
@@ -349,12 +362,12 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 				printk(KERN_WARNING "%s: received packet with "
 				       " own address as source address\n",
 				       source->dev->name);
-		} else {
+		} else { /* 更新端口和开始时间 */
 			/* fastpath: update of existing entry */
 			fdb->dst = source;
 			fdb->ageing_timer = jiffies;
 		}
-	} else {
+	} else { /* 创建TAC表项 */
 		spin_lock(&br->hash_lock);
 		if (!fdb_find(head, addr))
 			fdb_create(head, source, addr, 0);

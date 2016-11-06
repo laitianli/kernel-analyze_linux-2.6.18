@@ -65,8 +65,10 @@ static inline int is_zero_ether_addr(const u8 *addr)
  * Return true if the address is a multicast address.
  * By definition the broadcast address is also a multicast address.
  */
+/* 是否是多播地址 */
 static inline int is_multicast_ether_addr(const u8 *addr)
 {
+	/* 最高字节的低位为1，即为多播地址 */
 	return (0x01 & addr[0]);
 }
 
@@ -78,6 +80,7 @@ static inline int is_multicast_ether_addr(const u8 *addr)
  */
 static inline int is_broadcast_ether_addr(const u8 *addr)
 {
+	/* 前为FF的MAC为广播地址 */
 	return (addr[0] & addr[1] & addr[2] & addr[3] & addr[4] & addr[5]) == 0xff;
 }
 

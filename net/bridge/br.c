@@ -30,26 +30,27 @@ static struct llc_sap *br_stp_sap;
 static int __init br_init(void)
 {
 	int err;
-
+	/* 与SAP协议相关(SAP:Session Announcement Protocol 会话通知协议) */
 	br_stp_sap = llc_sap_open(LLC_SAP_BSPAN, br_stp_rcv);
 	if (!br_stp_sap) {
 		printk(KERN_ERR "bridge: can't register sap for STP\n");
 		return -EADDRINUSE;
 	}
-
+	/* 网桥数据库初始化 */
 	br_fdb_init();
-
+	/* 网桥的netfilter初始化 */
 	err = br_netfilter_init();
 	if (err)
 		goto err_out1;
-
+	/* 注册netdev_chain通知链 */
 	err = register_netdevice_notifier(&br_device_notifier);
 	if (err)
 		goto err_out2;
 
 	br_netlink_init();
+	/* 设置网桥的ioctl函数，在sock_ioctl使用得到 */
 	brioctl_set(br_ioctl_deviceless_stub);
-	br_handle_frame_hook = br_handle_frame;
+	br_handle_frame_hook = br_handle_frame; /* 网桥从网卡驱动接收数据的函数接口 */
 
 	br_fdb_get_hook = br_fdb_get;
 	br_fdb_put_hook = br_fdb_put;

@@ -48,34 +48,34 @@ struct mac_addr
 
 struct net_bridge_fdb_entry
 {
-	struct hlist_node		hlist;
-	struct net_bridge_port		*dst;
+	struct hlist_node		hlist;	/* 连接件，用于插入到net_bridge->hash表中 */
+	struct net_bridge_port		*dst;	/* 端口对象 */
 
 	struct rcu_head			rcu;
 	atomic_t			use_count;
-	unsigned long			ageing_timer;
-	mac_addr			addr;
-	unsigned char			is_local;
+	unsigned long			ageing_timer; /* 开始时间 */
+	mac_addr			addr;			/* MAC地址 */
+	unsigned char			is_local;	/* 是否是本地的MAC */
 	unsigned char			is_static;
 };
 
 struct net_bridge_port
 {
-	struct net_bridge		*br;
-	struct net_device		*dev;
-	struct list_head		list;
+	struct net_bridge		*br;	/* 网桥对象 */
+	struct net_device		*dev;	/* 物理接口 */
+	struct list_head		list;	/* 连接件，链表头为net_bridge:port_list */
 
 	/* STP */
-	u8				priority;
+	u8				priority;	/* 优先级 */
 	u8				state;
-	u16				port_no;
+	u16				port_no;	/* 端口号，此值为unsigned long中的第几位来表示 */
 	unsigned char			topology_change_ack;
 	unsigned char			config_pending;
-	port_id				port_id;
+	port_id				port_id;	/* 低10用于表示端口号，高6位用于表示优先级,参见br_init_port() */
 	port_id				designated_port;
 	bridge_id			designated_root;
 	bridge_id			designated_bridge;
-	u32				path_cost;
+	u32				path_cost;				/* 权值，参见port_cost() */
 	u32				designated_cost;
 
 	struct timer_list		forward_delay_timer;
@@ -89,10 +89,13 @@ struct net_bridge_port
 struct net_bridge
 {
 	spinlock_t			lock;
-	struct list_head		port_list;
-	struct net_device		*dev;
+	struct list_head		port_list; /* 链表头，用于连接此网桥下的所有端口 */
+	struct net_device		*dev;		/* 网桥的net_device对象 */
 	struct net_device_stats		statistics;
 	spinlock_t			hash_lock;
+	/* TAC表，一张MAC和端口的映射表，每当网桥的端口接收到报文时，要根据源MAC更新此表(MAC学习)，根据目的MAC转发报文(报文转发)
+ 	 * 表项用数据结构struct net_bridge_fdb_entry来表示。
+	 */
 	struct hlist_head		hash[BR_HASH_SIZE];
 	struct list_head		age_list;
 	unsigned long			feature_mask;

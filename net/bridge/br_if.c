@@ -189,18 +189,23 @@ static void del_br(struct net_bridge *br)
 	br_sysfs_delbr(br->dev);
  	unregister_netdevice(br->dev);
 }
-
+/**ltl
+ * 功能: 创建网桥设备
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 static struct net_device *new_bridge_dev(const char *name)
 {
 	struct net_bridge *br;
 	struct net_device *dev;
-
+	/* 分配net_device对象 */
 	dev = alloc_netdev(sizeof(struct net_bridge), name,
 			   br_dev_setup);
 	
 	if (!dev)
 		return NULL;
-
+	/* 获取net_bridge */
 	br = netdev_priv(dev);
 	br->dev = dev;
 
@@ -252,14 +257,19 @@ static int find_portno(struct net_bridge *br)
 
 	return (index >= BR_MAX_PORTS) ? -EXFULL : index;
 }
-
+/**ltl
+ * 功能: 分配端口
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 /* called with RTNL but without bridge lock */
 static struct net_bridge_port *new_nbp(struct net_bridge *br, 
 				       struct net_device *dev)
 {
 	int index;
 	struct net_bridge_port *p;
-	
+	/* 查找可用的端口号 */
 	index = find_portno(br);
 	if (index < 0)
 		return ERR_PTR(index);
@@ -271,11 +281,12 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
 	p->br = br;
 	dev_hold(dev);
 	p->dev = dev;
-	p->path_cost = port_cost(dev);
+	p->path_cost = port_cost(dev); /* 计算权值 */
  	p->priority = 0x8000 >> BR_PORT_BITS;
 	p->port_no = index;
 	br_init_port(p);
 	p->state = BR_STATE_DISABLED;
+	/* 检测的工作任务 */
 	INIT_WORK(&p->carrier_check, port_carrier_check, dev);
 	br_stp_port_timer_init(p);
 
@@ -287,12 +298,17 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
 
 	return p;
 }
-
+/**ltl
+ * 功能: 创建网桥
+ * 参数:
+ * 返回值:
+ * 说明:
+ */
 int br_add_bridge(const char *name)
 {
 	struct net_device *dev;
 	int ret;
-
+	/**/
 	dev = new_bridge_dev(name);
 	if (!dev) 
 		return -ENOMEM;
@@ -305,7 +321,7 @@ int br_add_bridge(const char *name)
 			goto out;
 		}
 	}
-
+	/* 将网桥加入系统 */
 	ret = register_netdevice(dev);
 	if (ret)
 		goto out;
@@ -344,7 +360,7 @@ int br_del_bridge(const char *name)
 	rtnl_unlock();
 	return ret;
 }
-
+/* 获取网桥中所有端口中最小的MTU */
 /* MTU of the bridge pseudo-device: ETH_DATA_LEN or the minimum of the ports */
 int br_min_mtu(const struct net_bridge *br)
 {
@@ -400,22 +416,28 @@ void br_features_recompute(struct net_bridge *br)
 	br->dev->features = features | checksum | NETIF_F_LLTX |
 			    NETIF_F_GSO_ROBUST;
 }
-
+/**ltl
+ * 功能: 向网桥添加接口
+ * 参数: br	->网桥
+ *		dev	->物理设备
+ * 返回值:
+ * 说明:
+ */
 /* called with RTNL */
 int br_add_if(struct net_bridge *br, struct net_device *dev)
 {
 	struct net_bridge_port *p;
 	int err = 0;
-
+	/* lo和非以太网的不能做为网桥 */
 	if (dev->flags & IFF_LOOPBACK || dev->type != ARPHRD_ETHER)
 		return -EINVAL;
-
+	/*  如果接口就是网桥，则不能添加 */
 	if (dev->hard_start_xmit == br_dev_xmit)
 		return -ELOOP;
-
+	/* 物理设备已经有端口，说明此物理设备已经添加到网桥中 */
 	if (dev->br_port != NULL)
 		return -EBUSY;
-
+	/* 分配端口 */
 	p = new_nbp(br, dev);
 	if (IS_ERR(p))
 		return PTR_ERR(p);
@@ -423,7 +445,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	err = kobject_add(&p->kobj);
 	if (err)
 		goto err0;
-
+	/* 将此物理接口插入到TAC表中 */
  	err = br_fdb_insert(br, p, dev->dev_addr);
 	if (err)
 		goto err1;
@@ -431,15 +453,16 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	err = br_sysfs_addif(p);
 	if (err)
 		goto err2;
-
+	/* 为物理接口关联端口对象 */
 	rcu_assign_pointer(dev->br_port, p);
 	dev_set_promiscuity(dev, 1);
-
+	/* 插入到网桥的端口列表 */
 	list_add_rcu(&p->list, &br->port_list);
 
 	spin_lock_bh(&br->lock);
 	br_stp_recalculate_bridge_id(br);
 	br_features_recompute(br);
+	/* 启动检测工作任务 */
 	schedule_delayed_work(&p->carrier_check, BR_PORT_DEBOUNCE);
 	spin_unlock_bh(&br->lock);
 

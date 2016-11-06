@@ -26,26 +26,32 @@ static struct net_device_stats *br_dev_get_stats(struct net_device *dev)
 	struct net_bridge *br = netdev_priv(dev);
 	return &br->statistics;
 }
-
+/**ltl
+ * 功能: 此接口用于网络层向网桥发送报文
+ * 参数: skb->报文对象
+ *		dev->网络设备对象
+ * 返回值:
+ * 说明:
+ */
 /* net device transmit always called with no BH (preempt_disabled) */
 int br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct net_bridge *br = netdev_priv(dev);
 	const unsigned char *dest = skb->data;
 	struct net_bridge_fdb_entry *dst;
-
+	/* 统计信息 */
 	br->statistics.tx_packets++;
 	br->statistics.tx_bytes += skb->len;
 
 	skb->mac.raw = skb->data;
 	skb_pull(skb, ETH_HLEN);
-
-	if (dest[0] & 1) 
+	/* 发送 */
+	if (dest[0] & 1) /* 目的地址是一个广播地址 */
 		br_flood_deliver(br, skb, 0);
-	else if ((dst = __br_fdb_get(br, dest)) != NULL)
-		br_deliver(dst->dst, skb);
+	else if ((dst = __br_fdb_get(br, dest)) != NULL)	/* 打到相应的映射表项 */
+		br_deliver(dst->dst, skb);	/* 报文通过某一端口转发出去。 */
 	else
-		br_flood_deliver(br, skb, 0);
+		br_flood_deliver(br, skb, 0); /* 报文通过所有的端口转发出去 */
 
 	return 0;
 }
@@ -167,11 +173,12 @@ static struct ethtool_ops br_ethtool_ops = {
 void br_dev_setup(struct net_device *dev)
 {
 	memset(dev->dev_addr, 0, ETH_ALEN);
-
+	/* 设置网桥设备的接口(网络设备的通用接口) */
 	ether_setup(dev);
-
+	/* 设置网桥的特有接口 */
 	dev->do_ioctl = br_dev_ioctl;
 	dev->get_stats = br_dev_get_stats;
+	/* 网桥的发送函数 */
 	dev->hard_start_xmit = br_dev_xmit;
 	dev->open = br_dev_open;
 	dev->set_multicast_list = br_dev_set_multicast_list;
